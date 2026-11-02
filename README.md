@@ -1,46 +1,48 @@
 # Bo Sideload (Android)
 
-Bo Sideload là ứng dụng **Android APK** để quản lý, kiểm tra cấu trúc và chuẩn bị tệp IPA trên điện thoại Android.
+Bo Sideload is an Android app for inspecting IPA packages and **re-signing them locally on supported Android ARM devices**. The signing engine is the upstream open-source [zsign](https://github.com/zhlynn/zsign), not Xcode or the old Cydia Impactor binary.
 
-## Phạm vi dự án
+## Current Android features
 
-Dự án này chỉ phát triển ứng dụng Android. Không xây dựng ứng dụng iOS riêng và không đưa mã nguồn TrollStore vào APK Android.
+- Pick an IPA using Android's document picker; display its name and size.
+- Inspect ZIP structure, path safety, `Payload/<App>.app/Info.plist`, and common app metadata.
+- Detect `CodeResources` and `embedded.mobileprovision` entries.
+- Keep a recent IPA list and share source files.
+- Select a `.p12` signing identity and `.mobileprovision` profile.
+- Enter the P12 password for one signing operation; the app does not save it in history or preferences.
+- Run zsign locally on Android and export the resulting signed IPA with Android's document picker.
+- Package verified zsign binaries for `arm64-v8a` and `armeabi-v7a` in the APK.
 
-## Tính năng hiện có
+## Signing requirements and limitations
 
-- Chọn tệp bằng trình chọn tài liệu của Android.
-- Hiển thị tên và dung lượng tệp.
-- Đọc cấu trúc ZIP của IPA.
-- Tìm `Payload/<ứng dụng>.app/Info.plist`.
-- Đọc metadata cơ bản từ plist XML và binary: tên ứng dụng, Bundle ID, phiên bản, mã bản dựng (nếu đọc được).
-- Giới hạn dữ liệu plist được phân tích ở 1 MB.
-- Nhận diện sự hiện diện của `Payload/<ứng dụng>.app/_CodeSignature/CodeResources` và `embedded.mobileprovision` để báo cáo sơ bộ về các tệp liên quan đến ký ứng dụng.
-- Trung tâm công cụ có liên kết tới [Apple Xcode](https://developer.apple.com/xcode/) và [Cydia Impactor](https://www.cydiaimpactor.com/), kèm ghi chú về nền tảng hỗ trợ và giới hạn của công cụ cũ.
-- Từ chối đường dẫn ZIP không an toàn và đường dẫn mục ZIP bị trùng/xung đột.
-- Giới hạn số lượng mục và tổng dữ liệu giải nén để giảm nguy cơ tệp ZIP độc hại.
+- Supply a valid P12 certificate/private key and a provisioning profile that authorizes the target Bundle ID, device(s), entitlements, and signing identity.
+- The app currently signs with the supplied P12 and profile. It does **not** obtain Apple certificates, create profiles, authenticate to an Apple Developer account, or bypass Apple's signing rules.
+- A successful zsign process means an output IPA was generated; it does not guarantee iOS will accept or launch it. The iPhone validates Apple's signature chain and provisioning authorization.
+- **Direct installation to an iPhone from Android is not implemented yet.** The bundled zsign CLI's `-i` option relies on `ideviceinstaller`; this APK does not bundle a tested Android USB-mux / pairing / Installation Proxy stack. Do not interpret "signed" as "installed".
+- This is not Xcode: Android cannot bundle Apple's proprietary Xcode, iOS SDK, or Apple build environment. Bo Sideload can process and re-sign an existing IPA, but cannot currently compile a full native iOS project into an IPA on Android.
+- Supported native engine ABIs: `arm64-v8a` and `armeabi-v7a`. Other CPU architectures are not packaged.
 
-## Giới hạn hiện tại
+## Upstream engine and license
 
-- Việc nhận diện `CodeResources` / `embedded.mobileprovision` chỉ kiểm tra sự hiện diện của tệp; **không xác minh mật mã chữ ký, chuỗi chứng chỉ, thời hạn/UDID trong provisioning profile hoặc khả năng cài đặt**.
-- Chưa giải mã/đánh giá nội dung provisioning profile và chưa kiểm tra tính toàn vẹn của từng mã nhị phân.
-- Chưa ký IPA; Xcode chỉ là công cụ desktop chạy trên macOS, không thể nhúng để chạy bên trong APK Android.
-- Cydia Impactor được đưa vào mục tham khảo dưới dạng công cụ đời cũ; trang dự án ghi chú việc cài IPA cần tài khoản Apple Developer trả phí từ cuối năm 2019. Bo Sideload không nhúng hoặc thực thi Cydia Impactor.
-- Chưa cài IPA lên iPhone.
-- Chưa có kết nối/chuyển tệp sang iPhone.
+- Engine: [zhlynn/zsign](https://github.com/zhlynn/zsign)
+- Version: `v1.1.2`
+- License: MIT; see [third_party/zsign/LICENSE](third_party/zsign/LICENSE).
+- Android release binaries are downloaded during GitHub Actions and checked against the published SHA-256 digests before being included in the APK. The binaries are not hand-modified.
+- zsign supports IPA re-signing, P12 keys, provisioning profiles, metadata changes, and certificate inspection. See its upstream README for the full command reference.
+- Bo Sideload is an independent project and is not affiliated with Apple or the zsign maintainers.
 
-**Lưu ý:** Android không thể chạy TrollStore để cài IPA trực tiếp lên iPhone. Mọi tính năng cài đặt trong tương lai phải dựa trên phương thức tương thích thực tế và được mô tả chính xác.
+## GitHub Actions APK
 
-## Tải APK thử nghiệm
+1. Open [GitHub Actions](https://github.com/temu838655-dev/Bo-Sideload-Android/actions).
+2. Open the newest successful run on `main`.
+3. Download the `Bo-Sideload-debug` artifact and extract the APK.
 
-1. Mở [GitHub Actions](https://github.com/temu838655-dev/Bo-Sideload-Android/actions).
-2. Chọn lần chạy workflow thành công mới nhất trên nhánh `main`.
-3. Kéo xuống mục **Artifacts**.
-4. Tải `Bo-Sideload-debug` và giải nén để lấy APK.
+The workflow downloads both Android zsign binaries, verifies their SHA-256 hashes, runs unit tests, and builds the debug APK. A GitHub Release is published only for tags matching `v*`.
 
-## GitHub Release
+## Build locally
 
-Workflow tải APK lên Actions Artifacts sau mỗi lần push lên `main`. GitHub Release chỉ được tạo khi push tag có dạng `v*`.
+Run the workflow's zsign download/verification step first so that `app/src/main/assets/zsign/<abi>/zsign` exists, then run:
 
-## Build
-
-Có thể chạy workflow thủ công tại **Actions → Android APK → Run workflow**.
+```bash
+gradle testDebugUnitTest assembleDebug
+```
