@@ -111,7 +111,7 @@ class MachOInspectorTest {
     fun rejectsEntitlementsSpecialSlotHashMismatch() {
         val signedEntitlements = entitlementBlob()
         val bytes = thinMachOWithEntitlements(signedEntitlements)
-        val blobOffset = 48 + 12 + 16 + 205
+        val blobOffset = 48 + 12 + 16 + 236
         bytes[blobOffset + 8] = (bytes[blobOffset + 8].toInt() xor 0x01).toByte()
         val result = MachOInspector.inspect(bytes)
         assertTrue(result.isMachO)
@@ -252,7 +252,7 @@ class MachOInspectorTest {
     private fun thinMachOWithEntitlements(entitlements: ByteArray?): ByteArray {
         val headerSize = 32
         val commandSize = 16
-        val codeDirectoryLength = 205
+        val codeDirectoryLength = 236
         val indexCount = if (entitlements != null) 2 else 1
         val indexBytes = indexCount * 8
         val cdOffset = 12 + indexBytes
@@ -285,7 +285,7 @@ class MachOInspectorTest {
         putBe(bytes, cd, 0xfade0c02.toInt())
         putBe(bytes, cd + 4, codeDirectoryLength)
         putBe(bytes, cd + 8, 0x20000)
-        putBe(bytes, cd + 16, 173)
+        putBe(bytes, cd + 16, 204)
         putBe(bytes, cd + 20, 44)
         putBe(bytes, cd + 24, 5)
         putBe(bytes, cd + 28, 1)
@@ -296,10 +296,10 @@ class MachOInspectorTest {
         bytes[cd + 44] = 0
         if (entitlements != null) {
             val digest = java.security.MessageDigest.getInstance("SHA-256").digest(entitlements)
-            digest.copyInto(bytes, cd + 173 - 5 * 32)
+            digest.copyInto(bytes, cd + 204 - 5 * 32)
         }
         val pageHash = java.security.MessageDigest.getInstance("SHA-256").digest(bytes.copyOfRange(0, 32))
-        pageHash.copyInto(bytes, cd + 173)
+        pageHash.copyInto(bytes, cd + 204)
         return bytes
     }
 
