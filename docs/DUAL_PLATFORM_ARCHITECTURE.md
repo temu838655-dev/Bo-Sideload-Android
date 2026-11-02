@@ -1,54 +1,42 @@
-# Bo Sideload — kiến trúc hai nền tảng
+# Bo Sideload — Android-only architecture
 
-## Mục tiêu
+## Product scope
 
-Bo Sideload gồm hai ứng dụng phối hợp nhưng có nhiệm vụ và mã nguồn riêng:
+Bo Sideload is an Android APK that imports, inspects, modifies within supported signing-tool capabilities, and re-signs existing IPA packages on Android ARM devices. It is not a port of Apple's proprietary Xcode and does not include the iOS SDK.
 
-- **Bo Sideload Android (repo hiện tại):** quản lý thư viện IPA, kiểm tra cấu trúc/metadata, lưu hồ sơ thiết bị và làm giao diện điều khiển cho các quy trình được hỗ trợ. Android không thể thực thi cơ chế cài đặt nội bộ của iOS chỉ bằng Kotlin.
-- **Bo Sideload iOS (mục tiêu native):** ứng dụng iOS/iPadOS, phát triển từ mã nguồn TrollStore chính thức khi thiết bị và phiên bản hệ điều hành đáp ứng điều kiện tương thích. Đây mới là nơi có thể tích hợp các thành phần cài đặt/permasigning đặc thù iOS.
+## Core modules
 
-## Nguồn upstream và giới hạn tương thích
+1. **IPA library:** document picker, recent files, metadata and export.
+2. **IPA inspector:** ZIP path validation, size/entry limits, Info.plist parsing and signing-file presence checks.
+3. **Signing engine:** upstream zsign v1.1.2 CLI for Android arm64-v8a and armeabi-v7a.
+4. **Credential input:** user-selected P12 and provisioning profile; P12 password entered per operation and not persisted.
+5. **Output manager:** run zsign in app-private storage and export the resulting IPA with Android's document picker.
+6. **Device install (future):** USB/Wi-Fi pairing, lockdown/usbmux transport, AFC and Installation Proxy require a separate Android-compatible implementation and real-device tests.
 
-- Upstream: https://github.com/opa334/TrollStore
-- README upstream mô tả TrollStore dựa trên lỗi xác minh chữ ký AMFI/CoreTrust, không phải kỹ thuật cài IPA phổ quát.
-- Danh sách phiên bản được upstream công bố tại thời điểm khảo sát: iOS 14.0 beta 2 đến 16.6.1, 16.7 RC (20H18) và 17.0. Không được quảng cáo hỗ trợ iOS 17.0.1 trở lên nếu upstream không công bố phương thức tương thích mới.
-- Trang Releases chính thức: https://github.com/opa334/TrollStore/releases
+## Upstream and license
 
-Không được hứa hẹn cài vĩnh viễn trên mọi iPhone. Trước mọi thao tác phải kiểm tra chính xác phiên bản iOS, model/kiến trúc, trạng thái thiết bị và phương thức cài đặt khả dụng. Không tự động chạy exploit hoặc thay đổi hệ thống khi chưa có xác nhận rõ ràng của người dùng.
+- zsign: https://github.com/zhlynn/zsign
+- Version: v1.1.2
+- License: MIT; included at third_party/zsign/LICENSE.
+- Android binaries are fetched during GitHub Actions and SHA-256 verified before APK packaging.
+- The project is independent and is not affiliated with Apple or the zsign maintainers.
 
-## Phân chia module
+## Platform limits
 
-### Android
+- Android can run the cross-compiled zsign binary and re-sign an existing IPA with compatible credentials.
+- Android cannot run Xcode or ship Apple's proprietary iOS SDK.
+- Successful signing does not guarantee installation; iOS enforces Apple-issued code-signing and provisioning requirements.
+- Direct installation to iPhone from Android is not yet implemented.
+- No exploit, TrollStore integration, or universal/permanent install claim is part of this Android-only project.
 
-1. IPA library: nhập, đổi tên hiển thị, dung lượng, SHA-256 và metadata.
-2. IPA inspector: xác thực ZIP, đường dẫn an toàn, Info.plist, bundle identifier, version và biểu tượng.
-3. Device workspace: hồ sơ iPhone, phiên bản iOS do người dùng cung cấp/được đọc qua giao thức được hỗ trợ.
-4. Workflow router: chỉ hiển thị phương thức cài đặt tương thích; không giả lập TrollStore trên Android.
-5. Transfer: chuyển tệp qua phương thức được người dùng chấp thuận; không lưu Apple ID/password dạng văn bản.
+## Roadmap
 
-### iOS
-
-1. Native TrollStore UI/installation components từ upstream.
-2. Compatibility gate trước khi hiện phương thức cài.
-3. Persistence/helper handling theo đúng upstream và chỉ khi thiết bị đủ điều kiện.
-4. IPA import, signing/install pipeline, app registration và recovery.
-5. Audit log, xác nhận trước thao tác rủi ro và xử lý lỗi có thể khôi phục.
-
-## Quy tắc tái sử dụng mã nguồn và giấy phép
-
-Repository TrollStore có giấy phép khác nhau theo phạm vi tệp: phần lớn mã nguồn được ghi MIT, trong khi một số tệp (ví dụ RootHelper/uicache.m) có BSD-4-Clause. Trước khi sao chép từng tệp phải kiểm tra header và LICENSE tương ứng, giữ nguyên copyright/license notices, ghi rõ thay đổi và không gắn nhãn Bo Sideload là dự án chính thức của TrollStore. Không được giả định toàn bộ repository có một giấy phép duy nhất.
-
-## Lộ trình và tiêu chí hoàn thành
-
-- [x] Tách rõ trách nhiệm Android và iOS, ghi nhận giới hạn tương thích.
-- [x] Xác nhận workflow Android hiện tại có thể build APK ở commit trước đó.
-- [ ] Hoàn tất kiểm tra IPA và unit tests trên Android (ZIP traversal, ZIP bomb, Info.plist malformed).
-- [ ] Tạo repository iOS riêng và import upstream theo đúng license.
-- [ ] Thiết lập build iOS trên macOS runner/Xcode; không dùng Android Gradle để build iOS.
-- [ ] Thêm compatibility gate và test matrix cho các phiên bản iOS được upstream hỗ trợ.
-- [ ] Chạy kiểm thử trên thiết bị thật phù hợp; không tuyên bố cài đặt thành công chỉ dựa vào build.
-- [ ] Xây cầu nối Android ↔ iOS an toàn, có xác thực và xác nhận thao tác.
-
-## Trạng thái trung thực
-
-APK Android hiện tại chỉ là nền tảng quản lý/kiểm tra IPA. Nó chưa ký IPA, chưa cài IPA lên iPhone và chưa chứa exploit/CoreTrust implementation. Chưa có ứng dụng iOS Bo Sideload hoặc bản build iOS trong repository này.
+- [x] Android APK base and CI.
+- [x] IPA structure and metadata inspection.
+- [x] Add Android zsign signing engine for ARM ABIs.
+- [x] Add P12/profile selection and signed IPA export UI.
+- [ ] Validate the engine on physical Android devices.
+- [ ] Add certificate and provisioning profile preflight inspection.
+- [ ] Add optional bundle metadata editor with profile compatibility checks.
+- [ ] Research and implement iPhone pairing/installation transport if technically viable.
+- [ ] Add end-to-end tests on physical iPhones with properly provisioned apps.
