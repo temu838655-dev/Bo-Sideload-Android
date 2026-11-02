@@ -27,6 +27,32 @@ class MachOInspectorTest {
         assertFalse(result.isMachO)
     }
 
+    @Test
+    fun detectsLittleEndianThinMachO() {
+        val bytes = ByteArray(28)
+        bytes[0] = 0xCE.toByte(); bytes[1] = 0xFA.toByte()
+        bytes[2] = 0xED.toByte(); bytes[3] = 0xFE.toByte()
+        putLe(bytes, 4, 7); putLe(bytes, 8, 3); putLe(bytes, 12, 2)
+        putLe(bytes, 16, 0); putLe(bytes, 20, 0); putLe(bytes, 24, 0)
+        val result = MachOInspector.inspect(bytes)
+        assertTrue(result.isMachO)
+        assertFalse(result.hasCodeSignatureCommand)
+    }
+
+    @Test
+    fun detectsFatMachOWithSignedSlice() {
+        val slice = thinMachO(includeSignature = true)
+        val offset = 28
+        val bytes = ByteArray(offset + slice.size)
+        putBe(bytes, 0, 0xCAFEBABE.toInt()); putBe(bytes, 4, 1)
+        putBe(bytes, 8, 0x0100000C); putBe(bytes, 12, 0)
+        putBe(bytes, 16, offset); putBe(bytes, 20, slice.size); putBe(bytes, 24, 0)
+        slice.copyInto(bytes, offset)
+        val result = MachOInspector.inspect(bytes)
+        assertTrue(result.isMachO)
+        assertTrue(result.hasCodeSignatureCommand)
+    }
+
     private fun thinMachO(includeSignature: Boolean): ByteArray {
         val headerSize = 32
         val commandSize = if (includeSignature) 16 else 0
