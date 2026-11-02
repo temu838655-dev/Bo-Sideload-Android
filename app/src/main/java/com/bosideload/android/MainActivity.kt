@@ -76,7 +76,7 @@ class MainActivity : Activity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != PICK_IPA || resultCode != RESULT_OK) return
         val uri = data?.data ?: return
-        contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        try { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: SecurityException) { /* Temporary read access is still available. */ }
         val name = queryName(uri)
         val size = querySize(uri)
         val isIpa = name.lowercase(Locale.ROOT).endsWith(".ipa")
