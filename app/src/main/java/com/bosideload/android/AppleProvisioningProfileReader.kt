@@ -109,7 +109,7 @@ internal object AppleProvisioningProfileReader {
         return certificates.array.mapNotNull { value ->
             val data = value as? NSData ?: return@mapNotNull null
             java.security.MessageDigest.getInstance("SHA-256")
-                .digest(data.bytes)
+                .digest(data.bytes())
                 .joinToString(":") { "%02X".format(it) }
         }
     }
