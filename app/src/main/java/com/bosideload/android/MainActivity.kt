@@ -58,7 +58,7 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
             setPadding(0, dp(8), 0, dp(4))
         }, fullWidth())
-        page.addView(label("Thư viện và công cụ kiểm tra tệp IPA trên Android", 14f, secondaryText, false).apply {
+        page.addView(label("Không gian kiểm tra và ký lại IPA trực tiếp trên Android", 14f, secondaryText, false).apply {
             gravity = Gravity.CENTER
             setPadding(0, 0, 0, dp(20))
         }, fullWidth())
