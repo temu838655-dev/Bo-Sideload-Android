@@ -86,7 +86,7 @@ class MainActivity : Activity() {
             "https://www.cydiaimpactor.com/"
         )
         page.addView(label(
-            "Lưu ý: ứng dụng chỉ kiểm tra cấu trúc ZIP cơ bản. Chưa xác minh chữ ký, chứng chỉ hoặc khả năng cài đặt IPA lên iPhone.",
+            "Lưu ý: ứng dụng nhận diện tệp CodeResources và embedded.mobileprovision nhưng chưa xác minh mật mã chữ ký, chứng chỉ, provisioning profile hoặc khả năng cài đặt IPA lên iPhone.",
             12f, secondaryText, false
         ).apply { setPadding(dp(4), dp(20), dp(4), 0) }, fullWidth())
         setContentView(scroll)
