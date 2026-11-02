@@ -14,7 +14,7 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import android.text.InputType
-import java.io.FileOutputStream
+import java.io.ByteArrayOutputStream
 
 /**
  * Lightweight source editor for Swift, plist and entitlement text files.
@@ -125,10 +125,22 @@ class SwiftWorkspaceActivity : Activity() {
         when (requestCode) {
             OPEN_SOURCE -> {
                 try {
-                    val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                    val input = contentResolver.openInputStream(uri)
                         ?: throw IllegalStateException("Không mở được tệp.")
-                    if (bytes.size > MAX_SOURCE_BYTES) {
-                        throw IllegalArgumentException("Tệp mã nguồn vượt giới hạn 2 MB.")
+                    val bytes = input.use { stream ->
+                        val output = ByteArrayOutputStream()
+                        val buffer = ByteArray(8 * 1024)
+                        var total = 0
+                        while (true) {
+                            val count = stream.read(buffer)
+                            if (count < 0) break
+                            total += count
+                            if (total > MAX_SOURCE_BYTES) {
+                                throw IllegalArgumentException("Tệp mã nguồn vượt giới hạn 2 MB.")
+                            }
+                            output.write(buffer, 0, count)
+                        }
+                        output.toByteArray()
                     }
                     editor.setText(bytes.toString(Charsets.UTF_8))
                     currentName = queryName(uri)
