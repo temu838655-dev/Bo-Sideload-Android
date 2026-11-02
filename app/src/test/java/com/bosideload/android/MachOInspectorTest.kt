@@ -98,6 +98,47 @@ class MachOInspectorTest {
     }
 
     @Test
+    fun verifiesEntitlementsSpecialSlotHash() {
+        val entitlements = entitlementBlob()
+        val result = MachOInspector.inspect(
+            thinMachOWithEntitlements(entitlements),
+        )
+        assertTrue(result.isMachO)
+        assertTrue(result.hasCodeDirectory)
+    }
+
+    @Test
+    fun rejectsEntitlementsSpecialSlotHashMismatch() {
+        val signedEntitlements = entitlementBlob()
+        val bytes = thinMachOWithEntitlements(signedEntitlements)
+        val blobOffset = 48 + 20 + 173
+        bytes[blobOffset + 8] = (bytes[blobOffset + 8].toInt() xor 0x01).toByte()
+        val result = MachOInspector.inspect(bytes)
+        assertTrue(result.isMachO)
+        assertFalse(result.hasCodeDirectory)
+    }
+
+    @Test
+    fun rejectsMissingEntitlementsBlobWhenSpecialSlotHashIsNonZero() {
+        val entitlements = entitlementBlob()
+        val bytes = thinMachOWithEntitlements(entitlements)
+        // Turn the embedded entitlements SuperBlob index into an unknown slot,
+        // leaving the CodeDirectory's slot-5 digest untouched.
+        putBe(bytes, 48 + 12, 7)
+        val result = MachOInspector.inspect(bytes)
+        assertTrue(result.isMachO)
+        assertFalse(result.hasCodeDirectory)
+    }
+
+    @Test
+    fun acceptsMissingEntitlementsBlobWhenSpecialSlotHashIsZero() {
+        val bytes = thinMachOWithEntitlements(null)
+        val result = MachOInspector.inspect(bytes)
+        assertTrue(result.isMachO)
+        assertTrue(result.hasCodeDirectory)
+    }
+
+    @Test
     fun rejectsCodePageHashMismatch() {
         val bytes = thinMachO(includeSignature = true)
         bytes[8] = (bytes[8].toInt() xor 0x01).toByte()
@@ -198,6 +239,68 @@ class MachOInspectorTest {
         assertTrue(result.isMachO)
         assertTrue(result.hasCodeSignatureCommand)
         assertFalse(result.hasCodeDirectory)
+    }
+
+    private fun entitlementBlob(): ByteArray {
+        val blob = ByteArray(12)
+        putBe(blob, 0, 0xfade7171.toInt())
+        putBe(blob, 4, blob.size)
+        putBe(blob, 8, 0)
+        return blob
+    }
+
+    private fun thinMachOWithEntitlements(entitlements: ByteArray?): ByteArray {
+        val headerSize = 32
+        val commandSize = 16
+        val codeDirectoryLength = 205
+        val indexCount = if (entitlements != null) 2 else 1
+        val indexBytes = indexCount * 8
+        val cdOffset = 12 + indexBytes
+        val entitlementOffset = cdOffset + codeDirectoryLength
+        val signatureSize = if (entitlements != null) entitlementOffset + entitlements.size else entitlementOffset
+        val bytes = ByteArray(headerSize + commandSize + signatureSize)
+        putBe(bytes, 0, -17958193)
+        putBe(bytes, 4, 0x0100000C)
+        putBe(bytes, 12, 2)
+        putBe(bytes, 16, 1)
+        putBe(bytes, 20, commandSize)
+        putBe(bytes, 32, 0x1d)
+        putBe(bytes, 36, 16)
+        putBe(bytes, 40, headerSize + commandSize)
+        putBe(bytes, 44, signatureSize)
+
+        val superBlob = headerSize + commandSize
+        putBe(bytes, superBlob, 0xfade0cc0.toInt())
+        putBe(bytes, superBlob + 4, signatureSize)
+        putBe(bytes, superBlob + 8, indexCount)
+        putBe(bytes, superBlob + 12, 0)
+        putBe(bytes, superBlob + 16, cdOffset)
+        if (entitlements != null) {
+            putBe(bytes, superBlob + 20, 5)
+            putBe(bytes, superBlob + 24, entitlementOffset)
+            entitlements.copyInto(bytes, superBlob + entitlementOffset)
+        }
+
+        val cd = superBlob + cdOffset
+        putBe(bytes, cd, 0xfade0c02.toInt())
+        putBe(bytes, cd + 4, codeDirectoryLength)
+        putBe(bytes, cd + 8, 0x20000)
+        putBe(bytes, cd + 16, 173)
+        putBe(bytes, cd + 20, 44)
+        putBe(bytes, cd + 24, 5)
+        putBe(bytes, cd + 28, 1)
+        putBe(bytes, cd + 32, 32)
+        bytes[cd + 36] = 32
+        bytes[cd + 37] = 2
+        bytes[cd + 39] = 12
+        bytes[cd + 44] = 0
+        if (entitlements != null) {
+            val digest = java.security.MessageDigest.getInstance("SHA-256").digest(entitlements)
+            digest.copyInto(bytes, cd + 173 - 5 * 32)
+        }
+        val pageHash = java.security.MessageDigest.getInstance("SHA-256").digest(bytes.copyOfRange(0, 32))
+        pageHash.copyInto(bytes, cd + 173)
+        return bytes
     }
 
     private fun thinMachO(includeSignature: Boolean, resourceSealBytes: ByteArray? = null, infoPlistBytes: ByteArray? = null): ByteArray {
