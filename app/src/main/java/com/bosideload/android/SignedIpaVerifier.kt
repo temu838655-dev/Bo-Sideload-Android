@@ -65,7 +65,7 @@ internal object SignedIpaVerifier {
 
         return Result(
             true,
-            "Đạt kiểm tra sau ký ở mức cấu trúc: ZIP đọc được, Bundle ID giữ nguyên, embedded.mobileprovision hiện diện; CodeDirectory chính khớp hash trang mã máy, Info.plist ở special slot 1 và CodeResources ở special slot 3. Chưa kiểm tra từng tài nguyên bên trong CodeResources, CMS, chuỗi chứng chỉ, CodeDirectory phụ hoặc độ tin cậy Apple.",
+            "Đạt kiểm tra sau ký ở mức cấu trúc: ZIP đọc được, Bundle ID giữ nguyên, embedded.mobileprovision hiện diện; CodeDirectory chính khớp hash trang mã máy; Info.plist ở special slot 1, CodeResources ở special slot 3 và Entitlements ở special slot 5 (khi có blob Entitlements). Đây chỉ là kiểm tra cấu trúc và hash được hỗ trợ; chưa xác minh từng tài nguyên bên trong CodeResources, CMS, chuỗi chứng chỉ, thu hồi chứng chỉ, CodeDirectory phụ hoặc độ tin cậy Apple.",
             signedBundle
         )
     }
