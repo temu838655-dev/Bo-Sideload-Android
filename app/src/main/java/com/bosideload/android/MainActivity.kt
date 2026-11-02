@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import android.database.Cursor
 import android.graphics.Color
+import android.graphics.Typeface
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
@@ -11,114 +12,183 @@ import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 import java.util.Locale
 
 class MainActivity : Activity() {
-    private lateinit var fileInfo: TextView
-    private lateinit var chooseButton: Button
+    private lateinit var resultPanel: TextView
+    private lateinit var recentPanel: LinearLayout
+    private lateinit var importButton: Button
+    private lateinit var store: RecentIpaStore
+    private val pageColor = Color.rgb(8, 14, 27)
+    private val panelColor = Color.rgb(22, 33, 53)
+    private val secondaryText = Color.rgb(174, 188, 208)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val root = LinearLayout(this).apply {
+        store = RecentIpaStore(this)
+        val page = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(28, 52, 28, 28)
-            setBackgroundColor(Color.rgb(9, 15, 29))
+            setPadding(dp(22), dp(28), dp(22), dp(28))
+            setBackgroundColor(pageColor)
         }
-        val title = TextView(this).apply {
-            text = "Bo Sideload"
-            textSize = 32f
-            setTextColor(Color.WHITE)
+        val scroll = ScrollView(this).apply {
+            isFillViewport = true
+            setBackgroundColor(pageColor)
+            addView(page)
+        }
+        page.addView(label("BO SIDELOAD", 13f, Color.rgb(89, 156, 255), true), fullWidth())
+        page.addView(label("Quản lý IPA dễ dàng", 27f, Color.WHITE, true).apply {
             gravity = Gravity.CENTER
-        }
-        val subtitle = TextView(this).apply {
-            text = "Trình quản lý và kiểm tra tệp IPA trên Android"
-            textSize = 15f
-            setTextColor(Color.LTGRAY)
+            setPadding(0, dp(8), 0, dp(4))
+        }, fullWidth())
+        page.addView(label("Thư viện và công cụ kiểm tra tệp IPA trên Android", 14f, secondaryText, false).apply {
             gravity = Gravity.CENTER
-            setPadding(0, 12, 0, 30)
-        }
-        fileInfo = TextView(this).apply {
-            text = "Chưa chọn tệp IPA"
+            setPadding(0, 0, 0, dp(20))
+        }, fullWidth())
+
+        importButton = Button(this).apply {
+            text = "＋  Chọn tệp IPA"
+            isAllCaps = false
             textSize = 16f
-            setTextColor(Color.WHITE)
-            gravity = Gravity.CENTER
-            setPadding(16, 24, 16, 24)
-            setBackgroundColor(Color.rgb(24, 35, 55))
+            setOnClickListener { chooseIpa() }
         }
-        chooseButton = Button(this).apply {
-            text = "Chọn tệp IPA"
-            setOnClickListener {
-                val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                    addCategory(Intent.CATEGORY_OPENABLE)
-                    type = "*/*"
-                }
-                startActivityForResult(picker, PICK_IPA)
-            }
+        page.addView(importButton, fullWidth())
+
+        resultPanel = label("Chưa có tệp nào được kiểm tra.\nChọn một tệp IPA để bắt đầu.", 14f, Color.WHITE, false).apply {
+            setPadding(dp(16), dp(16), dp(16), dp(16))
+            setBackgroundColor(panelColor)
         }
-        val warning = TextView(this).apply {
-            text = "Bo Sideload hiện kiểm tra cấu trúc ZIP cơ bản và tìm Info.plist. Ứng dụng chưa xác minh chữ ký, chứng chỉ hoặc khả năng cài đặt IPA."
-            textSize = 13f
-            setTextColor(Color.rgb(190, 200, 215))
-            gravity = Gravity.CENTER
-            setPadding(8, 26, 8, 0)
+        page.addView(resultPanel, fullWidth().apply { topMargin = dp(14) })
+        page.addView(label("Tệp đã mở gần đây", 18f, Color.WHITE, true).apply {
+            setPadding(0, dp(28), 0, dp(12))
+        }, fullWidth())
+        recentPanel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        page.addView(recentPanel, fullWidth())
+        page.addView(label(
+            "Lưu ý: ứng dụng chỉ kiểm tra cấu trúc ZIP cơ bản. Chưa xác minh chữ ký, chứng chỉ hoặc khả năng cài đặt IPA lên iPhone.",
+            12f, secondaryText, false
+        ).apply { setPadding(dp(4), dp(20), dp(4), 0) }, fullWidth())
+        setContentView(scroll)
+        renderRecent()
+    }
+
+    private fun chooseIpa() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
         }
-        root.addView(title, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        root.addView(subtitle)
-        root.addView(fileInfo, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        root.addView(chooseButton)
-        root.addView(warning)
-        setContentView(root)
+        startActivityForResult(intent, PICK_FILE)
     }
 
     @Deprecated("Deprecated in Android")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode != PICK_IPA || resultCode != RESULT_OK) return
+        if (requestCode != PICK_FILE || resultCode != RESULT_OK) return
         val uri = data?.data ?: return
         try {
-            contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        } catch (_: SecurityException) {
-            // Temporary read access is sufficient for this validation.
+            contentResolver.takePersistableUriPermission(uri, data.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        } catch (_: Exception) {
+            // The provider may grant temporary access only.
         }
+        inspect(uri, true)
+    }
 
-        val name = queryName(uri)
-        val size = querySize(uri)
-        val isIpa = name.lowercase(Locale.ROOT).endsWith(".ipa")
-        fileInfo.text = buildString {
-            append(if (isIpa) "Đang kiểm tra tệp IPA…" else "Đang kiểm tra tệp được chọn…")
-            append("\\nTên: ").append(name)
-            append("\\nDung lượng: ").append(if (size >= 0) formatSize(size) else "Không xác định")
+    private fun inspect(uri: Uri, remember: Boolean) {
+        val name = displayName(uri)
+        val size = fileSize(uri)
+        if (remember) {
+            store.add(RecentIpa(uri.toString(), name, size))
+            renderRecent()
         }
-        chooseButton.isEnabled = false
-
+        resultPanel.text = "ĐANG KIỂM TRA\nTên: $name\nDung lượng: ${formatSize(size)}\n\nĐang đọc cấu trúc tệp…"
+        importButton.isEnabled = false
         Thread {
             val result = try {
-                val input = contentResolver.openInputStream(uri)
-                if (input == null) {
-                    IpaArchiveValidator.Result(false, "Không thể mở tệp để đọc.")
-                } else {
-                    input.use { IpaArchiveValidator.validate(it) }
-                }
-            } catch (e: Exception) {
-                IpaArchiveValidator.Result(false, "Không thể đọc tệp: ${e.message ?: "lỗi không xác định"}")
+                val stream = contentResolver.openInputStream(uri)
+                if (stream == null) IpaArchiveValidator.Result(false, "Không thể mở tệp.")
+                else stream.use { IpaArchiveValidator.validate(it) }
+            } catch (error: Exception) {
+                IpaArchiveValidator.Result(false, "Không thể đọc tệp: ${error.message ?: "lỗi không xác định"}")
             }
-
             runOnUiThread {
-                chooseButton.isEnabled = true
-                fileInfo.text = buildString {
-                    append(if (isIpa) "KẾT QUẢ KIỂM TRA IPA" else "KẾT QUẢ KIỂM TRA TỆP")
-                    append("\\nTên: ").append(name)
-                    append("\\nDung lượng: ").append(if (size >= 0) formatSize(size) else "Không xác định")
-                    append("\\n\\n").append(result.message)
-                    append("\\n\\nLưu ý: Đây không phải kiểm tra chữ ký hoặc khả năng cài đặt.")
+                importButton.isEnabled = true
+                resultPanel.text = buildString {
+                    append(if (result.valid) "✓ CẤU TRÚC CƠ BẢN ĐẠT" else "⚠ KIỂM TRA CHƯA ĐẠT")
+                    append("\nTên: ").append(name)
+                    append("\nDung lượng: ").append(formatSize(size))
+                    append("\n\n").append(result.message)
+                    append("\n\nKhông phải kết quả xác minh chữ ký hoặc khả năng cài đặt.")
                 }
             }
         }.start()
     }
 
-    private fun queryName(uri: Uri): String {
+    private fun renderRecent() {
+        recentPanel.removeAllViews()
+        val files = store.all()
+        if (files.isEmpty()) {
+            recentPanel.addView(label("Chưa có tệp gần đây", 14f, secondaryText, false).apply {
+                setPadding(dp(14), dp(18), dp(14), dp(18))
+                setBackgroundColor(panelColor)
+            }, fullWidth())
+            return
+        }
+        files.forEach { file ->
+            val card = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(14), dp(12), dp(14), dp(10))
+                setBackgroundColor(panelColor)
+            }
+            card.addView(label(file.name, 15f, Color.WHITE, true), fullWidth())
+            card.addView(label(formatSize(file.sizeBytes), 12f, secondaryText, false).apply {
+                setPadding(0, dp(4), 0, dp(6))
+            }, fullWidth())
+            val actions = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.END
+            }
+            actions.addView(Button(this).apply {
+                text = "Kiểm tra"
+                isAllCaps = false
+                setOnClickListener { inspect(Uri.parse(file.uri), false) }
+            })
+            actions.addView(Button(this).apply {
+                text = "Chia sẻ"
+                isAllCaps = false
+                setOnClickListener { share(file) }
+            })
+            actions.addView(Button(this).apply {
+                text = "Bỏ khỏi danh sách"
+                isAllCaps = false
+                setOnClickListener {
+                    store.remove(file.uri)
+                    renderRecent()
+                    Toast.makeText(this@MainActivity, "Đã bỏ khỏi danh sách gần đây", Toast.LENGTH_SHORT).show()
+                }
+            })
+            card.addView(actions, fullWidth())
+            recentPanel.addView(card, fullWidth().apply { bottomMargin = dp(10) })
+        }
+    }
+
+    private fun share(file: RecentIpa) {
+        try {
+            val send = Intent(Intent.ACTION_SEND).apply {
+                type = "application/octet-stream"
+                putExtra(Intent.EXTRA_STREAM, Uri.parse(file.uri))
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(Intent.createChooser(send, "Chia sẻ tệp IPA"))
+        } catch (_: Exception) {
+            Toast.makeText(this, "Không thể chia sẻ tệp này.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun displayName(uri: Uri): String {
         var cursor: Cursor? = null
         return try {
             cursor = contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
@@ -132,7 +202,7 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun querySize(uri: Uri): Long {
+    private fun fileSize(uri: Uri): Long {
         var cursor: Cursor? = null
         return try {
             cursor = contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)
@@ -145,13 +215,26 @@ class MainActivity : Activity() {
     }
 
     private fun formatSize(bytes: Long): String {
+        if (bytes < 0) return "Không rõ dung lượng"
         if (bytes < 1024) return "$bytes B"
         val kb = bytes / 1024.0
         if (kb < 1024) return String.format(Locale.getDefault(), "%.1f KB", kb)
         return String.format(Locale.getDefault(), "%.1f MB", kb / 1024.0)
     }
 
+    private fun label(value: String, size: Float, color: Int, bold: Boolean) = TextView(this).apply {
+        text = value
+        textSize = size
+        setTextColor(color)
+        if (bold) setTypeface(null, Typeface.BOLD)
+    }
+
+    private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
+    private fun fullWidth() = LinearLayout.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+    )
+
     companion object {
-        private const val PICK_IPA = 100
+        private const val PICK_FILE = 100
     }
 }
