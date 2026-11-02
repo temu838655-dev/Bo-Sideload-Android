@@ -32,18 +32,18 @@ class MachOInspectorTest {
         val commandSize = if (includeSignature) 16 else 0
         val bytes = ByteArray(headerSize + commandSize + 32)
         putBe(bytes, 0, -17958193)
-        putLe(bytes, 4, 0x0100000C)
-        putLe(bytes, 8, 0)
-        putLe(bytes, 12, 2)
-        putLe(bytes, 16, if (includeSignature) 1 else 0)
-        putLe(bytes, 20, commandSize)
-        putLe(bytes, 24, 0)
-        putLe(bytes, 28, 0)
+        putBe(bytes, 4, 0x0100000C)
+        putBe(bytes, 8, 0)
+        putBe(bytes, 12, 2)
+        putBe(bytes, 16, if (includeSignature) 1 else 0)
+        putBe(bytes, 20, commandSize)
+        putBe(bytes, 24, 0)
+        putBe(bytes, 28, 0)
         if (includeSignature) {
-            putLe(bytes, 32, 0x1d)
-            putLe(bytes, 36, 16)
-            putLe(bytes, 40, headerSize + commandSize)
-            putLe(bytes, 44, 32)
+            putBe(bytes, 32, 0x1d)
+            putBe(bytes, 36, 16)
+            putBe(bytes, 40, headerSize + commandSize)
+            putBe(bytes, 44, 32)
         }
         return bytes
     }
