@@ -43,7 +43,8 @@ internal object AppleProvisioningProfileReader {
             appendLine("All devices: ${if (provisionsAllDevices) "Có" else "Không"}")
             appendLine("Ngày tạo: ${formatDate(creationDate)}")
             appendLine("Hết hạn: ${formatDate(expirationDate)}")
-            appendLine("Developer certificate trong profile: $developerCertificateCount")\n            append("SHA-256 certificate trong profile: ${developerCertificateSha256.joinToString().ifBlank { "Không có dữ liệu" }}")
+            appendLine("Developer certificate trong profile: $developerCertificateCount")
+            append("SHA-256 certificate trong profile: ${developerCertificateSha256.joinToString().ifBlank { "Không có dữ liệu" }}")
         }
     }
 
