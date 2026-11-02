@@ -88,7 +88,7 @@ internal object AppleSigningCompatibility {
         val certificates = try {
             AppleP12Reader.read(p12File.readBytes(), passwordChars)
         } finally {
-            passwordChars.fill('\\u0000')
+            passwordChars.fill('\u0000')
         }
         return check(metadata, profile, certificates, now)
     }
