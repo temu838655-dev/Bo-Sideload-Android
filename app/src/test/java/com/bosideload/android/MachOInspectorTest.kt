@@ -53,6 +53,26 @@ class MachOInspectorTest {
         assertTrue(result.hasCodeSignatureCommand)
     }
 
+    @Test
+    fun detectsFat64MachOWithSignedSlice() {
+        val slice = thinMachO(includeSignature = true)
+        val offset = 40
+        val bytes = ByteArray(offset + slice.size)
+        putBe(bytes, 0, 0xCAFEBABF.toInt())
+        putBe(bytes, 4, 1)
+        putBe(bytes, 8, 0x0100000C)
+        putBe(bytes, 12, 0)
+        putBe64(bytes, 16, offset.toLong())
+        putBe64(bytes, 24, slice.size.toLong())
+        putBe(bytes, 32, 0)
+        putBe(bytes, 36, 0)
+        slice.copyInto(bytes, offset)
+
+        val result = MachOInspector.inspect(bytes)
+        assertTrue(result.isMachO)
+        assertTrue(result.hasCodeSignatureCommand)
+    }
+
     private fun thinMachO(includeSignature: Boolean): ByteArray {
         val headerSize = 32
         val commandSize = if (includeSignature) 16 else 0
@@ -79,6 +99,11 @@ class MachOInspectorTest {
         bytes[offset + 1] = (value ushr 16).toByte()
         bytes[offset + 2] = (value ushr 8).toByte()
         bytes[offset + 3] = value.toByte()
+    }
+
+    private fun putBe64(bytes: ByteArray, offset: Int, value: Long) {
+        putBe(bytes, offset, (value ushr 32).toInt())
+        putBe(bytes, offset + 4, value.toInt())
     }
 
     private fun putLe(bytes: ByteArray, offset: Int, value: Int) {
