@@ -78,6 +78,14 @@ class MainActivity : Activity() {
             }
         }, fullWidth())
 
+        page.addView(Button(this).apply {
+            text = "Kết nối iPhone qua USB"
+            isAllCaps = false
+            setOnClickListener {
+                startActivity(Intent(this@MainActivity, DeviceConnectionActivity::class.java))
+            }
+        }, fullWidth())
+
         page.addView(label("KÝ IPA NGAY TRÊN ANDROID", 18f, Color.WHITE, true).apply {
             setPadding(0, dp(24), 0, dp(10))
         }, fullWidth())
@@ -128,7 +136,7 @@ class MainActivity : Activity() {
             setPadding(0, dp(28), 0, dp(12))
         }, fullWidth())
         page.addView(label(
-            "Bộ ký: zsign Android 1.1.2 (MIT), chạy cục bộ. Có thể ký lại IPA bằng P12 và provisioning profile. Việc ký không đồng nghĩa iPhone chắc chắn cài được. Kết nối USB/Wi-Fi và cài ứng dụng trực tiếp lên iPhone chưa được triển khai trong bản này.",
+            "Bộ ký: zsign Android 1.1.2 (MIT), chạy cục bộ. Có thể ký lại IPA bằng P12 và provisioning profile. Việc ký không đồng nghĩa iPhone chắc chắn cài được. Đã có màn hình dò thiết bị USB và kiểm tra quyền USB. Ghép đôi Lockdown, kết nối Wi-Fi và cài IPA trực tiếp lên iPhone vẫn chưa được triển khai.",
             12f, secondaryText, false
         ).apply { setPadding(dp(4), dp(8), dp(4), 0) }, fullWidth())
         setContentView(scroll)
