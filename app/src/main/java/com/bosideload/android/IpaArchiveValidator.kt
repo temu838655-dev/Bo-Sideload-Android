@@ -3,6 +3,7 @@ package com.bosideload.android
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.util.zip.ZipInputStream
+import java.util.HashSet
 
 /**
  * Checks basic IPA container structure only. It does not verify code signatures,
@@ -26,6 +27,7 @@ internal object IpaArchiveValidator {
                 var totalBytes = 0L
                 var foundInfoPlist = false
                 var infoPlistCount = 0
+                val seenPaths = HashSet<String>()
                 var metadata: IpaPlistReader.Metadata? = null
                 val buffer = ByteArray(16 * 1024)
 
@@ -38,10 +40,14 @@ internal object IpaArchiveValidator {
 
                     val path = entry.name.replace('\\', '/')
                     val segments = path.split('/')
-                    if (path.startsWith('/') || segments.any { it == ".." } ||
+                    if (path.isBlank() || path.startsWith('/') || segments.any { it == ".." } ||
                         Regex("^[A-Za-z]:").containsMatchIn(path)
                     ) {
                         return Result(false, "Tệp chứa đường dẫn ZIP không an toàn.")
+                    }
+                    val canonicalPath = path.trimEnd('/')
+                    if (!seenPaths.add(canonicalPath)) {
+                        return Result(false, "Tệp ZIP chứa đường dẫn bị lặp: $canonicalPath")
                     }
 
                     val isInfoPlist = !entry.isDirectory && INFO_PLIST_PATTERN.matches(path)
