@@ -1,9 +1,27 @@
 # Bo Sideload
 
-Ứng dụng Android hỗ trợ chuẩn bị và quản lý quy trình sideload ứng dụng iOS.
+Ứng dụng Android đang được phát triển để hỗ trợ chuẩn bị và quản lý quy trình sideload ứng dụng iOS.
 
-> Lưu ý: APK Android không thể cài trực tiếp IPA lên iPhone chỉ bằng cách chuyển đổi ứng dụng. Các tính năng giao tiếp thiết bị Apple, ký ứng dụng và cài IPA cần được tích hợp và kiểm thử riêng.
+## Trạng thái hiện tại
 
-## Build APK
+- Chọn tệp từ bộ nhớ Android bằng trình chọn tệp hệ thống.
+- Hiển thị tên và dung lượng tệp.
+- Chưa có chức năng ký IPA hoặc cài IPA lên iPhone.
+- Chưa có tích hợp hoàn chỉnh giao tiếp với thiết bị Apple.
 
-Mỗi lần push lên nhánh `main`, GitHub Actions sẽ build APK và đính kèm APK vào GitHub Release khi tạo tag `v*`.
+**Quan trọng:** Tệp có đuôi `.ipa` không đồng nghĩa là IPA hợp lệ. APK Android không thể tự cài IPA lên iPhone. Việc sideload cần quy trình ký phù hợp, Apple ID/chứng thực hợp lệ và kênh giao tiếp được hỗ trợ.
+
+## Tải APK thử nghiệm
+
+1. Mở tab [Actions](https://github.com/temu838655-dev/Bo-Sideload-Android/actions).
+2. Chọn workflow chạy thành công mới nhất trên nhánh `main`.
+3. Kéo xuống mục **Artifacts**.
+4. Tải `Bo-Sideload-debug` và giải nén ZIP để lấy APK.
+
+## GitHub Release
+
+Workflow hiện tải APK lên Actions Artifacts mỗi lần push lên `main`. GitHub Release chỉ được tạo khi push một tag có dạng `v*`.
+
+## Build thủ công
+
+Workflow có thể chạy bằng **Actions → Android APK → Run workflow** nếu cấu hình workflow cho phép.
