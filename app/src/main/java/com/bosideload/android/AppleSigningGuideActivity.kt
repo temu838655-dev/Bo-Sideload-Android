@@ -1,13 +1,16 @@
 package com.bosideload.android
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.EditText
 import android.widget.LinearLayout
+import android.text.InputType
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
@@ -17,6 +20,9 @@ class AppleSigningGuideActivity : Activity() {
     private val white = 0xFFFFFFFF.toInt()
     private val blue = 0xFF70A7FF.toInt()
     private lateinit var importedFileInfo: TextView
+    private var profileCertificateFingerprints: Set<String> = emptySet()
+    private var profileTeamIds: Set<String> = emptySet()
+    private var profileBundleIdentifier: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -139,6 +145,15 @@ class AppleSigningGuideActivity : Activity() {
                     "Không đọc được profile: ${error.message ?: "định dạng không hợp lệ"}\n\nTệp: $name"
                 }
                 runOnUiThread {
+                    try {
+                        val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                        if (bytes != null) {
+                            val parsed = AppleProvisioningProfileReader.read(bytes)
+                            profileCertificateFingerprints = parsed.developerCertificateSha256.toSet()
+                            profileTeamIds = parsed.teamIdentifiers.toSet()
+                            profileBundleIdentifier = parsed.bundleIdentifier
+                        }
+                    } catch (_: Exception) { }
                     importedFileInfo.text = result
                     Toast.makeText(this, "Đã phân tích nội dung profile (chưa xác minh chữ ký).", Toast.LENGTH_SHORT).show()
                 }
@@ -169,9 +184,81 @@ class AppleSigningGuideActivity : Activity() {
                     Toast.makeText(this, "Đã đọc thông tin certificate công khai.", Toast.LENGTH_SHORT).show()
                 }
             }.start()
+        } else if (name.endsWith(".p12", true)) {
+            inspectP12(uri, name)
         } else {
-            importedFileInfo.text = "Tên: $name\nLoại: $type\n\nP12 chứa khóa riêng chưa được đọc ở màn hình này. Không chia sẻ mật khẩu P12 trong chat."
+            importedFileInfo.text = "Tên: $name\nLoại: $type\n\nĐịnh dạng này chưa được hỗ trợ."
         }
+    }
+
+    private fun inspectP12(uri: Uri, name: String) {
+        val passwordInput = EditText(this).apply {
+            hint = "Mật khẩu P12 (chỉ nhập trên thiết bị)"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Mở certificate P12")
+            .setMessage("Mật khẩu chỉ được dùng trong bộ nhớ để đọc tệp trên thiết bị. Bo Sideload không gửi mật khẩu đi đâu và không xuất khóa riêng.")
+            .setView(passwordInput)
+            .setNegativeButton("Hủy", null)
+            .setPositiveButton("Đọc P12") { _, _ ->
+                val password = passwordInput.text.toString().toCharArray()
+                importedFileInfo.text = "Đang đọc P12 cục bộ…"
+                Thread {
+                    val result = try {
+                        val bytes = contentResolver.openInputStream(uri)?.use { input ->
+                            val output = java.io.ByteArrayOutputStream()
+                            val buffer = ByteArray(16 * 1024)
+                            var total = 0
+                            while (true) {
+                                val count = input.read(buffer)
+                                if (count < 0) break
+                                total += count
+                                require(total <= 10 * 1024 * 1024) { "P12 vượt giới hạn 10 MB." }
+                                output.write(buffer, 0, count)
+                            }
+                            output.toByteArray()
+                        } ?: throw IllegalStateException("Không mở được P12.")
+                        val entries = AppleP12Reader.read(bytes, password)
+                        buildString {
+                            appendLine("Tệp: $name")
+                            appendLine("Số certificate: ${entries.size}")
+                            entries.forEachIndexed { index, entry ->
+                                appendLine()
+                                appendLine("Mục ${index + 1}: ${entry.alias}")
+                                appendLine("Subject: ${entry.subject}")
+                                appendLine("Issuer: ${entry.issuer}")
+                                appendLine("Có private key: ${if (entry.hasPrivateKey) "Có" else "Không"}")
+                                appendLine("Hết hạn: ${entry.notAfter}")
+                                appendLine("SHA-256: ${entry.sha256Fingerprint}")
+                                if (profileCertificateFingerprints.isNotEmpty()) {
+                                    appendLine(if (entry.sha256Fingerprint in profileCertificateFingerprints)
+                                        "KẾT QUẢ: Certificate khớp một certificate được nhúng trong profile."
+                                    else "CẢNH BÁO: Fingerprint không khớp certificate nào trong profile đã chọn.")
+                                }
+                                val teamMatch = profileTeamIds.any { team ->
+                                    entry.subject.contains("OU=$team") || entry.subject.contains("OU=$team,")
+                                }
+                                if (profileTeamIds.isNotEmpty()) {
+                                    appendLine(if (teamMatch) "Team ID: có dấu hiệu khớp OU trong Subject."
+                                        else "Team ID: chưa xác nhận được OU khớp Team ID của profile.")
+                                }
+                            }
+                            appendLine()
+                            append("Lưu ý: đọc cấu trúc PKCS#12 và certificate; chưa xác minh chuỗi tin cậy Apple, trạng thái thu hồi hoặc quyền ký thực tế.")
+                        }
+                    } catch (error: Exception) {
+                        "Không mở được P12: ${error.message ?: "sai mật khẩu hoặc tệp không hợp lệ"}"
+                    } finally {
+                        password.fill('\\u0000')
+                    }
+                    runOnUiThread {
+                        importedFileInfo.text = result
+                        Toast.makeText(this, "Đã xử lý P12 trên thiết bị.", Toast.LENGTH_SHORT).show()
+                    }
+                }.start()
+            }
+            .show()
     }
 
     private fun queryName(uri: Uri): String {
