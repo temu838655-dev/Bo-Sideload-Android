@@ -12,6 +12,7 @@ internal object AppleP12Reader {
         val hasPrivateKey: Boolean,
         val subject: String,
         val issuer: String,
+        val notBefore: java.util.Date,
         val notAfter: java.util.Date,
         val sha256Fingerprint: String
     )
@@ -34,6 +35,7 @@ internal object AppleP12Reader {
                 hasPrivateKey = store.isKeyEntry(alias),
                 subject = cert.subjectX500Principal.name,
                 issuer = cert.issuerX500Principal.name,
+                notBefore = cert.notBefore,
                 notAfter = cert.notAfter,
                 sha256Fingerprint = fingerprint
             )
