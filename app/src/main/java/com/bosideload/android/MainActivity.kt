@@ -121,6 +121,16 @@ class MainActivity : Activity() {
                     append("\nTên: ").append(name)
                     append("\nDung lượng: ").append(formatSize(size))
                     append("\n\n").append(result.message)
+                    val info = result.metadata
+                    if (info != null) {
+                        append("\n\nTHÔNG TIN ỨNG DỤNG")
+                        info.appName?.let { append("\nTên ứng dụng: ").append(it) }
+                        info.bundleId?.let { append("\nBundle ID: ").append(it) }
+                        info.shortVersion?.let { append("\nPhiên bản: ").append(it) }
+                        info.buildVersion?.let { append("\nMã bản dựng: ").append(it) }
+                    } else if (result.valid) {
+                        append("\n\nChưa đọc được metadata: Info.plist có thể dùng định dạng nhị phân hoặc XML không hỗ trợ.")
+                    }
                     append("\n\nKhông phải kết quả xác minh chữ ký hoặc khả năng cài đặt.")
                 }
             }
