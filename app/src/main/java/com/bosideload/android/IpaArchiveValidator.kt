@@ -25,6 +25,7 @@ internal object IpaArchiveValidator {
                 var entryCount = 0
                 var totalBytes = 0L
                 var foundInfoPlist = false
+                var infoPlistCount = 0
                 var metadata: IpaPlistReader.Metadata? = null
                 val buffer = ByteArray(16 * 1024)
 
@@ -44,7 +45,13 @@ internal object IpaArchiveValidator {
                     }
 
                     val isInfoPlist = !entry.isDirectory && INFO_PLIST_PATTERN.matches(path)
-                    if (isInfoPlist) foundInfoPlist = true
+                    if (isInfoPlist) {
+                        foundInfoPlist = true
+                        infoPlistCount++
+                        if (infoPlistCount > 1) {
+                            return Result(false, "Tệp chứa nhiều Info.plist ở cấp ứng dụng; không thể xác định gói IPA chính.")
+                        }
+                    }
                     val plistBytes = if (isInfoPlist) ByteArrayOutputStream() else null
                     var plistTooLarge = false
 
