@@ -105,13 +105,13 @@ class DeviceConnectionActivity : Activity() {
             }
             card.addView(TextView(this).apply {
                 text = buildString {
-                    append(if (apple) "Thiết bị USB thuộc Apple (VID)\\n" else "Thiết bị USB\\n")
+                    append(if (apple) "Thiết bị USB thuộc Apple (VID)\n" else "Thiết bị USB\n")
                     append("Tên: ").append(device.deviceName)
-                    append("\\nVendor ID: ").append(hex(device.vendorId))
+                    append("\nVendor ID: ").append(hex(device.vendorId))
                     append("   Product ID: ").append(hex(device.productId))
-                    append("\\nUSB class: ").append(device.deviceClass)
+                    append("\nUSB class: ").append(device.deviceClass)
                     append("   Interfaces: ").append(device.interfaceCount)
-                    append("\\nQuyền Android: ").append(if (usbManager.hasPermission(device)) "Đã cấp" else "Chưa cấp")
+                    append("\nQuyền Android: ").append(if (usbManager.hasPermission(device)) "Đã cấp" else "Chưa cấp")
                 }
                 textSize = 13f
                 setTextColor(-1)
