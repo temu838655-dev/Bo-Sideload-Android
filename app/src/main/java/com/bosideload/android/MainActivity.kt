@@ -86,6 +86,14 @@ class MainActivity : Activity() {
             }
         }, fullWidth())
 
+        page.addView(Button(this).apply {
+            text = "Apple ID miễn phí • iPhone / MacBook / Apple TV"
+            isAllCaps = false
+            setOnClickListener {
+                startActivity(Intent(this@MainActivity, AppleSigningGuideActivity::class.java))
+            }
+        }, fullWidth())
+
         page.addView(label("KÝ IPA NGAY TRÊN ANDROID", 18f, Color.WHITE, true).apply {
             setPadding(0, dp(24), 0, dp(10))
         }, fullWidth())
