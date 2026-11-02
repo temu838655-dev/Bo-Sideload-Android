@@ -2,6 +2,7 @@ package com.bosideload.android
 
 import com.dd.plist.NSArray
 import com.dd.plist.NSDate
+import com.dd.plist.NSData
 import com.dd.plist.NSDictionary
 import com.dd.plist.PropertyListParser
 import org.bouncycastle.cms.CMSSignedData
@@ -28,7 +29,8 @@ internal object AppleProvisioningProfileReader {
         val provisionsAllDevices: Boolean,
         val creationDate: Date?,
         val expirationDate: Date?,
-        val developerCertificateCount: Int
+        val developerCertificateCount: Int,
+        val developerCertificateSha256: List<String>
     ) {
         fun summary(): String = buildString {
             appendLine("Tên profile: ${name ?: "Không có"}")
@@ -41,7 +43,7 @@ internal object AppleProvisioningProfileReader {
             appendLine("All devices: ${if (provisionsAllDevices) "Có" else "Không"}")
             appendLine("Ngày tạo: ${formatDate(creationDate)}")
             appendLine("Hết hạn: ${formatDate(expirationDate)}")
-            append("Developer certificate trong profile: $developerCertificateCount")
+            appendLine("Developer certificate trong profile: $developerCertificateCount")\n            append("SHA-256 certificate trong profile: ${developerCertificateSha256.joinToString().ifBlank { "Không có dữ liệu" }}")
         }
     }
 
@@ -99,6 +101,16 @@ internal object AppleProvisioningProfileReader {
             "Nội dung plist trong profile không hợp lệ hoặc quá lớn."
         }
         return content
+    }
+
+    private fun developerCertificateHashes(root: NSDictionary): List<String> {
+        val certificates = root.objectForKey("DeveloperCertificates") as? NSArray ?: return emptyList()
+        return certificates.array.mapNotNull { value ->
+            val data = value as? NSData ?: return@mapNotNull null
+            java.security.MessageDigest.getInstance("SHA-256")
+                .digest(data.bytes)
+                .joinToString(":") { "%02X".format(it) }
+        }
     }
 
     private fun string(root: NSDictionary, key: String): String? =
