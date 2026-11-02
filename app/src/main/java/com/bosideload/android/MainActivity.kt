@@ -205,6 +205,7 @@ class MainActivity : Activity() {
                 input.delete()
                 workDir.deleteRecursively()
             } catch (error: Exception) {
+                File(cacheDir, "signing-work").deleteRecursively()
                 result = ZsignEngine.SignResult(
                     false, null,
                     "Không thể chuẩn bị tệp ký: ${error.message ?: "lỗi không xác định"}"
@@ -265,7 +266,7 @@ class MainActivity : Activity() {
             } catch (error: Exception) {
                 "Không xuất được IPA: ${error.message ?: "lỗi không xác định"}"
             }
-            pendingSignedFile = null
+            if (message.startsWith("✓")) pendingSignedFile = null
             runOnUiThread { signingStatus.text = message }
         }.start()
     }
@@ -320,7 +321,8 @@ class MainActivity : Activity() {
 
     private fun inspect(uri: Uri, remember: Boolean) {
         selectedIpaUri = uri
-        selectedIpaName = displayName(uri).substringBeforeLast('.', displayName(uri)) + "-signed.ipa"
+        selectedIpaName = displayName(uri).substringAfterLast('/').substringBeforeLast('.', displayName(uri))
+            .replace(Regex("[^A-Za-z0-9._-]"), "_").take(100) + "-signed.ipa"
         updateSignButton()
         val name = displayName(uri)
         val size = fileSize(uri)
