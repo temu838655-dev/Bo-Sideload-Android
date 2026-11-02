@@ -12,7 +12,8 @@ internal object IpaPlistReader {
         val appName: String?,
         val bundleId: String?,
         val shortVersion: String?,
-        val buildVersion: String?
+        val buildVersion: String?,
+        val executable: String?
     )
 
     fun read(bytes: ByteArray): Metadata? {
@@ -26,7 +27,8 @@ internal object IpaPlistReader {
                 appName = value("CFBundleDisplayName") ?: value("CFBundleName"),
                 bundleId = value("CFBundleIdentifier"),
                 shortVersion = value("CFBundleShortVersionString"),
-                buildVersion = value("CFBundleVersion")
+                buildVersion = value("CFBundleVersion"),
+                executable = value("CFBundleExecutable")
             )
         } catch (_: Exception) {
             null
