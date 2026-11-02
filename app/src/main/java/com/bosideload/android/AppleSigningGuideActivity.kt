@@ -113,7 +113,7 @@ class AppleSigningGuideActivity : Activity() {
                         output.toByteArray()
                     } ?: throw IllegalStateException("Không mở được tệp.")
                     val info = AppleProvisioningProfileReader.read(bytes)
-                    val expired = info.expirationDate?.before(java.util.Date()) == true
+                    val expiryStatus = when {\n                        info.expirationDate == null -> "Không xác định được ngày hết hạn trong profile."\n                        info.expirationDate.before(java.util.Date()) -> "CẢNH BÁO: Profile đã hết hạn."\n                        else -> "Profile chưa quá hạn theo ngày ghi trong tệp."\n                    }
                     val platformNote = when {
                         info.platforms.any { it.equals("tvOS", true) } -> "Profile có khai báo tvOS."
                         info.platforms.any { it.equals("macOS", true) } -> "Profile có khai báo macOS."
@@ -127,7 +127,7 @@ class AppleSigningGuideActivity : Activity() {
                         appendLine()
                         appendLine(info.summary())
                         appendLine()
-                        append(if (expired) "CẢNH BÁO: Profile đã hết hạn." else "Profile chưa quá hạn theo ngày ghi trong tệp.")
+                        append(expiryStatus)
                         appendLine()
                         append("Lưu ý: đã đọc nội dung CMS/plist; chưa xác minh chữ ký CMS, chuỗi tin cậy Apple, thu hồi chứng chỉ hoặc khả năng cài trên thiết bị.")
                     }
