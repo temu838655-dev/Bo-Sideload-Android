@@ -83,6 +83,20 @@ internal object SignedIpaVerifier {
                     }
                 }
                 val appPrefix = prefix ?: return null
+                val sealEntry = zip.getEntry(appPrefix + "_CodeSignature/CodeResources") ?: return null
+                if (sealEntry.isDirectory || sealEntry.size !in 1..MAX_CODE_RESOURCES_BYTES) return null
+                val sealOutput = ByteArrayOutputStream()
+                zip.getInputStream(sealEntry).use { input ->
+                    val buffer = ByteArray(16 * 1024)
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        if (sealOutput.size().toLong() + count > MAX_CODE_RESOURCES_BYTES) return null
+                        sealOutput.write(buffer, 0, count)
+                    }
+                }
+                val sealBytes = sealOutput.toByteArray()
+
                 val entry = zip.getEntry(appPrefix + executable) ?: return null
                 if (entry.isDirectory || entry.size > MAX_EXECUTABLE_BYTES) return null
                 val output = ByteArrayOutputStream()
@@ -95,7 +109,7 @@ internal object SignedIpaVerifier {
                         output.write(buffer, 0, count)
                     }
                 }
-                MachOInspector.inspect(output.toByteArray())
+                MachOInspector.inspect(output.toByteArray(), sealBytes)
             }
         } catch (_: Exception) {
             null
@@ -112,6 +126,7 @@ internal object SignedIpaVerifier {
         }
 
     private const val MAX_EXECUTABLE_BYTES = 512L * 1024L * 1024L
+    private const val MAX_CODE_RESOURCES_BYTES = 16L * 1024L * 1024L
     private const val MAX_IPA_BYTES = 2L * 1024L * 1024L * 1024L
     private const val MAX_UNCOMPRESSED_BYTES = 2L * 1024L * 1024L * 1024L
     private const val MAX_ENTRIES = 100_000
