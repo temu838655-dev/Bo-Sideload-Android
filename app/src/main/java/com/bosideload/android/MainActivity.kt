@@ -54,7 +54,7 @@ class MainActivity : Activity() {
             addView(page)
         }
         page.addView(label("BO SIDELOAD", 13f, Color.rgb(89, 156, 255), true), fullWidth())
-        page.addView(label("Quản lý IPA dễ dàng", 27f, Color.WHITE, true).apply {
+        page.addView(label("Bo Sideload Studio", 27f, Color.WHITE, true).apply {
             gravity = Gravity.CENTER
             setPadding(0, dp(8), 0, dp(4))
         }, fullWidth())
@@ -126,36 +126,6 @@ class MainActivity : Activity() {
         ).apply { setPadding(dp(4), dp(8), dp(4), 0) }, fullWidth())
         setContentView(scroll)
         renderRecent()
-    }
-
-    private fun addToolCard(
-        parent: LinearLayout,
-        title: String,
-        description: String,
-        buttonText: String,
-        url: String
-    ) {
-        val card = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(14), dp(14), dp(14), dp(12))
-            setBackgroundColor(panelColor)
-        }
-        card.addView(label(title, 16f, Color.WHITE, true), fullWidth())
-        card.addView(label(description, 13f, secondaryText, false).apply {
-            setPadding(0, dp(8), 0, dp(10))
-        }, fullWidth())
-        card.addView(Button(this).apply {
-            text = buttonText
-            isAllCaps = false
-            setOnClickListener {
-                try {
-                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                } catch (_: Exception) {
-                    Toast.makeText(this@MainActivity, "Không thể mở liên kết.", Toast.LENGTH_SHORT).show()
-                }
-            }
-        }, fullWidth())
-        parent.addView(card, fullWidth().apply { bottomMargin = dp(10) })
     }
 
     private fun chooseCredential(requestCode: Int) {
@@ -297,7 +267,16 @@ class MainActivity : Activity() {
     @Deprecated("Deprecated in Android")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (resultCode != RESULT_OK) return
+        if (resultCode != RESULT_OK) {
+            if (requestCode == CREATE_SIGNED_IPA) {
+                pendingSignedFile?.delete()
+                pendingSignedFile = null
+                if (::signingStatus.isInitialized) {
+                    signingStatus.text = "Đã hủy lưu IPA. Tệp tạm đã được xóa."
+                }
+            }
+            return
+        }
         val uri = data?.data ?: return
         when (requestCode) {
             PICK_FILE, PICK_P12, PICK_PROFILE -> {
