@@ -2,18 +2,20 @@ package com.bosideload.android
 
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
-import java.util.zip.ZipInputStream
 import java.util.HashSet
+import java.util.zip.ZipInputStream
 
 /**
- * Checks basic IPA container structure only. It does not verify code signatures,
- * provisioning profiles, certificates, or whether iOS can install the package.
+ * Checks IPA container structure and detects signing-related files.
+ * Presence checks are NOT cryptographic signature or certificate verification.
  */
 internal object IpaArchiveValidator {
     data class Result(
         val valid: Boolean,
         val message: String,
-        val metadata: IpaPlistReader.Metadata? = null
+        val metadata: IpaPlistReader.Metadata? = null,
+        val hasCodeResources: Boolean = false,
+        val hasProvisioningProfile: Boolean = false
     )
 
     fun validate(
@@ -27,6 +29,8 @@ internal object IpaArchiveValidator {
                 var totalBytes = 0L
                 var foundInfoPlist = false
                 var infoPlistCount = 0
+                var hasCodeResources = false
+                var hasProvisioningProfile = false
                 val seenPaths = HashSet<String>()
                 var metadata: IpaPlistReader.Metadata? = null
                 val buffer = ByteArray(16 * 1024)
@@ -38,7 +42,7 @@ internal object IpaArchiveValidator {
                         return Result(false, "Tệp có quá nhiều mục ZIP; đã dừng để bảo vệ thiết bị.")
                     }
 
-                    val path = entry.name.replace('\\', '/')
+                    val path = entry.name.replace('\\\\', '/')
                     val segments = path.split('/')
                     if (path.isBlank() || path.startsWith('/') || segments.any { it == ".." } ||
                         Regex("^[A-Za-z]:").containsMatchIn(path)
@@ -58,9 +62,15 @@ internal object IpaArchiveValidator {
                             return Result(false, "Tệp chứa nhiều Info.plist ở cấp ứng dụng; không thể xác định gói IPA chính.")
                         }
                     }
+                    if (!entry.isDirectory && path.endsWith("/_CodeSignature/CodeResources")) {
+                        hasCodeResources = true
+                    }
+                    if (!entry.isDirectory && path.matches(Regex("^Payload/[^/]+\\\\.app/embedded\\\\.mobileprovision$"))) {
+                        hasProvisioningProfile = true
+                    }
+
                     val plistBytes = if (isInfoPlist) ByteArrayOutputStream() else null
                     var plistTooLarge = false
-
                     if (!entry.isDirectory) {
                         while (true) {
                             val read = zip.read(buffer)
@@ -93,7 +103,9 @@ internal object IpaArchiveValidator {
                     else -> Result(
                         true,
                         "Đã đọc cấu trúc ZIP và tìm thấy Info.plist trong thư mục Payload. Cấu trúc IPA cơ bản có vẻ hợp lệ.",
-                        metadata
+                        metadata,
+                        hasCodeResources,
+                        hasProvisioningProfile
                     )
                 }
             }
@@ -103,5 +115,5 @@ internal object IpaArchiveValidator {
     }
 
     private const val MAX_PLIST_BYTES = 1024 * 1024
-    private val INFO_PLIST_PATTERN = Regex("^Payload/[^/]+\\.app/Info\\.plist$")
+    private val INFO_PLIST_PATTERN = Regex("^Payload/[^/]+\\\\.app/Info\\\\.plist$")
 }
