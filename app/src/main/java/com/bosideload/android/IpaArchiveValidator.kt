@@ -1,5 +1,6 @@
 package com.bosideload.android
 
+import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.util.zip.ZipInputStream
 
@@ -8,7 +9,11 @@ import java.util.zip.ZipInputStream
  * provisioning profiles, certificates, or whether iOS can install the package.
  */
 internal object IpaArchiveValidator {
-    data class Result(val valid: Boolean, val message: String)
+    data class Result(
+        val valid: Boolean,
+        val message: String,
+        val metadata: IpaPlistReader.Metadata? = null
+    )
 
     fun validate(
         input: InputStream,
@@ -20,6 +25,7 @@ internal object IpaArchiveValidator {
                 var entryCount = 0
                 var totalBytes = 0L
                 var foundInfoPlist = false
+                var metadata: IpaPlistReader.Metadata? = null
                 val buffer = ByteArray(16 * 1024)
 
                 while (true) {
@@ -29,7 +35,7 @@ internal object IpaArchiveValidator {
                         return Result(false, "Tệp có quá nhiều mục ZIP; đã dừng để bảo vệ thiết bị.")
                     }
 
-                    val path = entry.name.replace('\\', '/')
+                    val path = entry.name.replace('\\\\', '/')
                     val segments = path.split('/')
                     if (path.startsWith('/') || segments.any { it == ".." } ||
                         Regex("^[A-Za-z]:").containsMatchIn(path)
@@ -37,7 +43,9 @@ internal object IpaArchiveValidator {
                         return Result(false, "Tệp chứa đường dẫn ZIP không an toàn.")
                     }
 
-                    if (INFO_PLIST_PATTERN.matches(path)) foundInfoPlist = true
+                    val isInfoPlist = INFO_PLIST_PATTERN.matches(path)
+                    if (isInfoPlist) foundInfoPlist = true
+                    val plistBytes = if (isInfoPlist) ByteArrayOutputStream() else null
 
                     if (!entry.isDirectory) {
                         while (true) {
@@ -47,7 +55,13 @@ internal object IpaArchiveValidator {
                             if (totalBytes > maxUncompressedBytes) {
                                 return Result(false, "Dữ liệu giải nén vượt giới hạn an toàn.")
                             }
+                            if (plistBytes != null && plistBytes.size() + read <= MAX_PLIST_BYTES) {
+                                plistBytes.write(buffer, 0, read)
+                            }
                         }
+                    }
+                    if (plistBytes != null && plistBytes.size() <= MAX_PLIST_BYTES) {
+                        metadata = IpaPlistReader.read(plistBytes.toByteArray())
                     }
                     zip.closeEntry()
                 }
@@ -60,7 +74,8 @@ internal object IpaArchiveValidator {
                     )
                     else -> Result(
                         true,
-                        "Đã đọc cấu trúc ZIP và tìm thấy Info.plist trong thư mục Payload. Cấu trúc IPA cơ bản có vẻ hợp lệ."
+                        "Đã đọc cấu trúc ZIP và tìm thấy Info.plist trong thư mục Payload. Cấu trúc IPA cơ bản có vẻ hợp lệ.",
+                        metadata
                     )
                 }
             }
@@ -69,5 +84,6 @@ internal object IpaArchiveValidator {
         }
     }
 
-    private val INFO_PLIST_PATTERN = Regex("^Payload/[^/]+\\.app/Info\\.plist$")
+    private const val MAX_PLIST_BYTES = 1024 * 1024
+    private val INFO_PLIST_PATTERN = Regex("^Payload/[^/]+\\\\.app/Info\\\\.plist$")
 }
