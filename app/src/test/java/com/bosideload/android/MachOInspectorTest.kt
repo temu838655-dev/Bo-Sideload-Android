@@ -48,6 +48,29 @@ class MachOInspectorTest {
     }
 
     @Test
+    fun verifiesCodeResourcesSpecialSlotHash() {
+        val seal = "signed resource seal".toByteArray()
+        val result = MachOInspector.inspect(
+            thinMachO(includeSignature = true, resourceSealBytes = seal),
+            resourceSealBytes = seal
+        )
+        assertTrue(result.isMachO)
+        assertTrue(result.hasCodeDirectory)
+    }
+
+    @Test
+    fun rejectsCodeResourcesSpecialSlotHashMismatch() {
+        val signedSeal = "signed resource seal".toByteArray()
+        val changedSeal = "modified resource seal".toByteArray()
+        val result = MachOInspector.inspect(
+            thinMachO(includeSignature = true, resourceSealBytes = signedSeal),
+            resourceSealBytes = changedSeal
+        )
+        assertTrue(result.isMachO)
+        assertFalse(result.hasCodeDirectory)
+    }
+
+    @Test
     fun rejectsCodePageHashMismatch() {
         val bytes = thinMachO(includeSignature = true)
         bytes[8] = (bytes[8].toInt() xor 0x01).toByte()
@@ -150,10 +173,11 @@ class MachOInspectorTest {
         assertFalse(result.hasCodeDirectory)
     }
 
-    private fun thinMachO(includeSignature: Boolean): ByteArray {
+    private fun thinMachO(includeSignature: Boolean, resourceSealBytes: ByteArray? = null): ByteArray {
         val headerSize = 32
         val commandSize = if (includeSignature) 16 else 0
-        val signatureSize = if (includeSignature) 97 else 0
+        val codeDirectoryLength = if (resourceSealBytes != null) 173 else 77
+        val signatureSize = if (includeSignature) 20 + codeDirectoryLength else 0
         val bytes = ByteArray(headerSize + commandSize + signatureSize)
         putBe(bytes, 0, -17958193)
         putBe(bytes, 4, 0x0100000C)
@@ -177,12 +201,12 @@ class MachOInspectorTest {
             putBe(bytes, blob + 16, 20) // CodeDirectory starts after SuperBlob index.
             val cd = blob + 20
             putBe(bytes, cd, 0xfade0c02.toInt())
-            putBe(bytes, cd + 4, 77)
+            putBe(bytes, cd + 4, codeDirectoryLength)
             putBe(bytes, cd + 8, 0x20000) // version 2.0: 44-byte fixed header
             putBe(bytes, cd + 12, 0)
-            putBe(bytes, cd + 16, 45) // hashOffset
+            putBe(bytes, cd + 16, if (resourceSealBytes != null) 141 else 45) // hashOffset
             putBe(bytes, cd + 20, 44) // identifier offset
-            putBe(bytes, cd + 24, 0) // special slots
+            putBe(bytes, cd + 24, if (resourceSealBytes != null) 3 else 0) // special slots
             putBe(bytes, cd + 28, 1) // code slots
             putBe(bytes, cd + 32, 32) // codeLimit
             bytes[cd + 36] = 32
@@ -190,9 +214,13 @@ class MachOInspectorTest {
             bytes[cd + 38] = 0
             bytes[cd + 39] = 12 // 4 KB pages
             bytes[cd + 44] = 0 // empty identifier terminator
+            if (resourceSealBytes != null) {
+                val sealHash = java.security.MessageDigest.getInstance("SHA-256").digest(resourceSealBytes)
+                sealHash.copyInto(bytes, cd + 45) // special slot 3 is stored before hashOffset
+            }
             val pageHash = java.security.MessageDigest.getInstance("SHA-256")
                 .digest(bytes.copyOfRange(0, 32))
-            pageHash.copyInto(bytes, cd + 45)
+            pageHash.copyInto(bytes, cd + if (resourceSealBytes != null) 141 else 45)
         }
         return bytes
     }
