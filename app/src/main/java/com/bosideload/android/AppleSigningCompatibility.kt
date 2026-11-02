@@ -74,6 +74,47 @@ internal object AppleSigningCompatibility {
         return Check(errors.isEmpty(), errors, warnings)
     }
 
+    fun preflight(
+        ipaFile: java.io.File,
+        p12File: java.io.File,
+        profileFile: java.io.File,
+        password: String,
+        now: Date = Date()
+    ): Check {
+        val metadata = readIpaMetadata(ipaFile)
+            ?: return Check(false, listOf("Không đọc được Info.plist / CFBundleIdentifier từ IPA."), emptyList())
+        val profile = AppleProvisioningProfileReader.read(profileFile.readBytes())
+        val passwordChars = password.toCharArray()
+        val certificates = try {
+            AppleP12Reader.read(p12File.readBytes(), passwordChars)
+        } finally {
+            passwordChars.fill('\\u0000')
+        }
+        return check(metadata, profile, certificates, now)
+    }
+
+    private fun readIpaMetadata(file: java.io.File): IpaPlistReader.Metadata? {
+        require(file.isFile && file.length() > 0L) { "IPA không tồn tại hoặc rỗng." }
+        java.util.zip.ZipInputStream(file.inputStream().buffered()).use { zip ->
+            while (true) {
+                val entry = zip.nextEntry ?: break
+                if (!entry.isDirectory && entry.name.matches(Regex("^Payload/[^/]+\\\\.app/Info\\\\.plist$"))) {
+                    val output = java.io.ByteArrayOutputStream()
+                    val buffer = ByteArray(8 * 1024)
+                    while (true) {
+                        val count = zip.read(buffer)
+                        if (count < 0) break
+                        require(output.size() + count <= 1024 * 1024) { "Info.plist vượt giới hạn 1 MB." }
+                        output.write(buffer, 0, count)
+                    }
+                    return IpaPlistReader.read(output.toByteArray())
+                }
+                zip.closeEntry()
+            }
+        }
+        return null
+    }
+
     internal fun matchesApplicationIdentifier(profileApplicationId: String, bundleId: String): Boolean {
         val separator = profileApplicationId.indexOf('.')
         if (separator <= 0 || separator == profileApplicationId.lastIndex) return false
