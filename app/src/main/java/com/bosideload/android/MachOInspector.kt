@@ -197,6 +197,37 @@ internal object MachOInspector {
                     }
                 }
 
+                // CSSLOT_ENTITLEMENTS is special slot 5. The entitlement blob
+                // is stored in the embedded-signature SuperBlob; authenticate its
+                // complete encoded blob against the CodeDirectory special slot.
+                if (specialSlots >= CSSLOT_ENTITLEMENTS) {
+                    if (hashOffset < CSSLOT_ENTITLEMENTS * hashSize) return false
+                    var entitlementsOffset = -1
+                    var entitlementsLength = -1
+                    repeat(count.toInt()) { blobIndex ->
+                        val blobEntry = offset + 12 + blobIndex * 8
+                        val blobType = readU32(bytes, blobEntry, false)?.toLong()?.and(0xffffffffL) ?: return false
+                        if (blobType == CSSLOT_ENTITLEMENTS.toLong()) {
+                            val relativeBlob = readU32(bytes, blobEntry + 4, false)?.toLong()?.and(0xffffffffL) ?: return false
+                            if (relativeBlob + 8 > blobLength) return false
+                            val absoluteBlob = offset + relativeBlob.toInt()
+                            val blobMagic = readU32(bytes, absoluteBlob, false)?.toLong()?.and(0xffffffffL) ?: return false
+                            val blobSize = readU32(bytes, absoluteBlob + 4, false)?.toLong()?.and(0xffffffffL) ?: return false
+                            if (blobMagic != CSMAGIC_EMBEDDED_ENTITLEMENTS || blobSize < 8 || relativeBlob + blobSize > blobLength) return false
+                            entitlementsOffset = absoluteBlob
+                            entitlementsLength = blobSize.toInt()
+                        }
+                    }
+                    if (entitlementsOffset < 0 || entitlementsLength < 0) return false
+                    val entitlementHashAt = cd + hashOffset.toInt() - CSSLOT_ENTITLEMENTS * hashSize
+                    val entitlementDigest = MessageDigest.getInstance(algorithm).digest(
+                        bytes.copyOfRange(entitlementsOffset, entitlementsOffset + entitlementsLength)
+                    )
+                    for (i in 0 until hashSize) {
+                        if (bytes[entitlementHashAt + i] != entitlementDigest[i]) return false
+                    }
+                }
+
                 // CSSLOT_RESOURCEDIR is special slot 3. When the caller supplies
                 // the bundle's CodeResources bytes, require the CodeDirectory's
                 // backwards-indexed special-slot digest to match them.
@@ -265,7 +296,9 @@ internal object MachOInspector {
     private const val LC_CODE_SIGNATURE = 0x1d
     private const val CSMAGIC_EMBEDDED_SIGNATURE = 0xfade0cc0L
     private const val CSMAGIC_CODEDIRECTORY = 0xfade0c02L
+    private const val CSMAGIC_EMBEDDED_ENTITLEMENTS = 0xfade7171L
     private const val CSSLOT_CODEDIRECTORY = 0L
     private const val CSSLOT_INFOSLOT = 1
     private const val CSSLOT_RESOURCEDIR = 3
+    private const val CSSLOT_ENTITLEMENTS = 5
 }
