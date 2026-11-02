@@ -127,6 +127,29 @@ class MachOInspectorTest {
         assertFalse(result.hasCodeDirectory)
     }
 
+    @Test
+    fun rejectsFatMachOWhenOneArchitectureIsUnsigned() {
+        val signed = thinMachO(includeSignature = true)
+        val unsigned = thinMachO(includeSignature = false)
+        val tableSize = 8 + 2 * 20
+        val signedOffset = tableSize
+        val unsignedOffset = signedOffset + signed.size
+        val bytes = ByteArray(unsignedOffset + unsigned.size)
+        putBe(bytes, 0, 0xCAFEBABE.toInt())
+        putBe(bytes, 4, 2)
+        putBe(bytes, 8, 0x0100000C); putBe(bytes, 12, 0)
+        putBe(bytes, 16, signedOffset); putBe(bytes, 20, signed.size); putBe(bytes, 24, 0)
+        putBe(bytes, 28, 0x01000007); putBe(bytes, 32, 3)
+        putBe(bytes, 36, unsignedOffset); putBe(bytes, 40, unsigned.size); putBe(bytes, 44, 0)
+        signed.copyInto(bytes, signedOffset)
+        unsigned.copyInto(bytes, unsignedOffset)
+
+        val result = MachOInspector.inspect(bytes)
+        assertTrue(result.isMachO)
+        assertTrue(result.hasCodeSignatureCommand)
+        assertFalse(result.hasCodeDirectory)
+    }
+
     private fun thinMachO(includeSignature: Boolean): ByteArray {
         val headerSize = 32
         val commandSize = if (includeSignature) 16 else 0
