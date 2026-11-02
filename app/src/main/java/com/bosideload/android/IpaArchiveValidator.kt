@@ -43,9 +43,10 @@ internal object IpaArchiveValidator {
                         return Result(false, "Tệp chứa đường dẫn ZIP không an toàn.")
                     }
 
-                    val isInfoPlist = INFO_PLIST_PATTERN.matches(path)
+                    val isInfoPlist = !entry.isDirectory && INFO_PLIST_PATTERN.matches(path)
                     if (isInfoPlist) foundInfoPlist = true
                     val plistBytes = if (isInfoPlist) ByteArrayOutputStream() else null
+                    var plistTooLarge = false
 
                     if (!entry.isDirectory) {
                         while (true) {
@@ -55,12 +56,16 @@ internal object IpaArchiveValidator {
                             if (totalBytes > maxUncompressedBytes) {
                                 return Result(false, "Dữ liệu giải nén vượt giới hạn an toàn.")
                             }
-                            if (plistBytes != null && plistBytes.size() + read <= MAX_PLIST_BYTES) {
-                                plistBytes.write(buffer, 0, read)
+                            if (plistBytes != null) {
+                                if (plistBytes.size() + read <= MAX_PLIST_BYTES) {
+                                    plistBytes.write(buffer, 0, read)
+                                } else {
+                                    plistTooLarge = true
+                                }
                             }
                         }
                     }
-                    if (plistBytes != null && plistBytes.size() <= MAX_PLIST_BYTES) {
+                    if (plistBytes != null && !plistTooLarge) {
                         metadata = IpaPlistReader.read(plistBytes.toByteArray())
                     }
                     zip.closeEntry()
