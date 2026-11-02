@@ -1,5 +1,7 @@
 package com.bosideload.android
 
+import java.security.MessageDigest
+
 /**
  * Structural Mach-O load-command inspection only. Finding LC_CODE_SIGNATURE does not
  * validate the CodeDirectory, CMS signature, certificate chain, or Apple trust.
@@ -123,6 +125,11 @@ internal object MachOInspector {
      * Checks the embedded-signature SuperBlob and CodeDirectory bounds only.
      * It does not validate code hashes, CMS, certificates, or Apple trust.
      */
+    /**
+     * Validates the primary CodeDirectory structure and its code-page hashes.
+     * This is not CMS/certificate-chain verification and does not validate alternate
+     * CodeDirectories, resource seals, or Apple's trust policy.
+     */
     private fun containsCodeDirectory(bytes: ByteArray, offset: Int, size: Int): Boolean {
         if (offset < 0 || size < 12 || offset.toLong() + size > bytes.size) return false
         if (readU32(bytes, offset, false)?.toLong()?.and(0xffffffffL) != CSMAGIC_EMBEDDED_SIGNATURE) return false
@@ -138,24 +145,68 @@ internal object MachOInspector {
                 val cd = offset + relative.toInt()
                 val magic = readU32(bytes, cd, false)?.toLong()?.and(0xffffffffL) ?: return false
                 val cdLength = readU32(bytes, cd + 4, false)?.toLong()?.and(0xffffffffL) ?: return false
+                val version = readU32(bytes, cd + 8, false)?.toLong()?.and(0xffffffffL) ?: return false
                 val hashOffset = readU32(bytes, cd + 16, false)?.toLong()?.and(0xffffffffL) ?: return false
                 val identOffset = readU32(bytes, cd + 20, false)?.toLong()?.and(0xffffffffL) ?: return false
                 val specialSlots = readU32(bytes, cd + 24, false)?.toLong()?.and(0xffffffffL) ?: return false
                 val codeSlots = readU32(bytes, cd + 28, false)?.toLong()?.and(0xffffffffL) ?: return false
-                val codeLimit = readU32(bytes, cd + 32, false)?.toLong()?.and(0xffffffffL) ?: return false
+                var codeLimit = readU32(bytes, cd + 32, false)?.toLong()?.and(0xffffffffL) ?: return false
                 val hashSize = bytes[cd + 36].toInt() and 0xff
                 val hashType = bytes[cd + 37].toInt() and 0xff
                 val pageSize = bytes[cd + 39].toInt() and 0xff
                 if (magic != CSMAGIC_CODEDIRECTORY || cdLength < 44 || relative + cdLength > blobLength) return false
                 if (hashSize == 0 || hashType !in 1..4 || pageSize > 30 || identOffset >= cdLength) return false
-                if (codeSlots > 10_000_000 || specialSlots > 10_000) return false
+                if (specialSlots > 10_000 || codeSlots > 10_000_000) return false
+
+                // CodeDirectory v=0x20300 adds a 64-bit codeLimit at offset 56.
+                if (version >= 0x20300L) {
+                    if (cdLength < 64) return false
+                    val limit64 = readU64BigEndian(bytes, cd + 56) ?: return false
+                    if (limit64 != 0L) codeLimit = limit64
+                }
+                if (codeLimit > Int.MAX_VALUE.toLong()) return false
+                val pageBytes = if (pageSize == 0) codeLimit.coerceAtLeast(1L) else 1L shl pageSize
+                val expectedSlots = if (codeLimit == 0L) 0L else (codeLimit + pageBytes - 1) / pageBytes
+                if (expectedSlots != codeSlots) return false
                 if (hashOffset > cdLength || codeSlots * hashSize > cdLength - hashOffset) return false
                 if (specialSlots * hashSize > hashOffset) return false
-                if (codeLimit > Int.MAX_VALUE.toLong()) return false
+                if (codeLimit > bytes.size.toLong()) return false
+
+                val algorithm = when (hashType) {
+                    1 -> "SHA-1"
+                    2, 3 -> "SHA-256"
+                    4 -> "SHA-384"
+                    else -> return false
+                }
+                val digestLength = MessageDigest.getInstance(algorithm).digestLength
+                if (hashSize > digestLength || (hashType == 1 && hashSize > 20) ||
+                    (hashType == 2 && hashSize != 32) || (hashType == 3 && hashSize > 32) ||
+                    (hashType == 4 && hashSize > 48)) return false
+
+                val hashStart = cd + hashOffset.toInt()
+                var pageOffset = 0L
+                repeat(codeSlots.toInt()) { slot ->
+                    val pageLength = minOf(pageBytes, codeLimit - pageOffset).toInt()
+                    val digest = MessageDigest.getInstance(algorithm)
+                        .digest(bytes.copyOfRange(pageOffset.toInt(), pageOffset.toInt() + pageLength))
+                    val expectedAt = hashStart + slot * hashSize
+                    for (i in 0 until hashSize) {
+                        if (bytes[expectedAt + i] != digest[i]) return false
+                    }
+                    pageOffset += pageLength
+                }
                 return true
             }
         }
         return false
+    }
+
+    private fun readU64BigEndian(bytes: ByteArray, offset: Int): Long? {
+        if (offset < 0 || offset.toLong() + 8 > bytes.size) return null
+        val high = readU32(bytes, offset, false)?.toLong()?.and(0xffffffffL) ?: return null
+        val low = readU32(bytes, offset + 4, false)?.toLong()?.and(0xffffffffL) ?: return null
+        if (high > 0x7fffffffL) return null
+        return (high shl 32) or low
     }
 
     private fun readU32(bytes: ByteArray, offset: Int, little: Boolean): Int? {
