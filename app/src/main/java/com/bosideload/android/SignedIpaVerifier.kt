@@ -59,10 +59,13 @@ internal object SignedIpaVerifier {
         if (!machO.hasCodeSignatureCommand) {
             return Result(false, "Mach-O chính không có LC_CODE_SIGNATURE sau khi ký.")
         }
+        if (!machO.hasCodeDirectory) {
+            return Result(false, "Không tìm thấy CodeDirectory có cấu trúc hợp lệ trong chữ ký Mach-O.")
+        }
 
         return Result(
             true,
-            "Đạt kiểm tra cấu trúc sau ký: ZIP đọc được, Bundle ID giữ nguyên, CodeResources và embedded.mobileprovision hiện diện; Mach-O chính có LC_CODE_SIGNATURE. Chưa xác minh mật mã CodeDirectory/CMS hoặc chuỗi tin cậy Apple.",
+            "Đạt kiểm tra cấu trúc sau ký: ZIP đọc được, Bundle ID giữ nguyên, CodeResources và embedded.mobileprovision hiện diện; Mach-O chính có LC_CODE_SIGNATURE và CodeDirectory đạt kiểm tra cấu trúc. Chưa đối chiếu hash mã máy, xác minh CMS, chuỗi chứng chỉ hoặc độ tin cậy Apple.",
             signedBundle
         )
     }
