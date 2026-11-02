@@ -5,7 +5,12 @@ package com.bosideload.android
  * validate the CodeDirectory, CMS signature, certificate chain, or Apple trust.
  */
 internal object MachOInspector {
-    data class Result(val isMachO: Boolean, val hasCodeSignatureCommand: Boolean, val message: String)
+    data class Result(
+        val isMachO: Boolean,
+        val hasCodeSignatureCommand: Boolean,
+        val message: String,
+        val hasCodeDirectory: Boolean = false
+    )
 
     fun inspect(bytes: ByteArray): Result {
         if (bytes.size < 4) return Result(false, false, "Executable too small.")
@@ -50,8 +55,13 @@ internal object MachOInspector {
             val slice = inspectThin(bytes, offset.toInt(), size.toInt())
             if (!slice.isMachO) return slice
             foundSignature = foundSignature || slice.hasCodeSignatureCommand
+            hasCodeDirectory = hasCodeDirectory || slice.hasCodeDirectory
         }
-        return Result(true, foundSignature, if (foundSignature) "Mach-O contains LC_CODE_SIGNATURE." else "Mach-O has no LC_CODE_SIGNATURE.")
+        return Result(
+            true, foundSignature,
+            if (foundSignature) "Mach-O contains LC_CODE_SIGNATURE." else "Mach-O has no LC_CODE_SIGNATURE.",
+            hasCodeDirectory
+        )
     }
 
     private fun inspectThin(bytes: ByteArray, start: Int, length: Int): Result {
@@ -77,6 +87,7 @@ internal object MachOInspector {
         var cursor = start + headerSize
         val commandsEnd = cursor + sizeofcmds.toInt()
         var hasCodeSignature = false
+        var hasCodeDirectory = false
         repeat(ncmds.toInt()) {
             if (cursor + 8 > commandsEnd) return Result(false, false, "Truncated load command.")
             val cmd = readU32(bytes, cursor, little) ?: return Result(false, false, "Invalid load command.")
@@ -92,10 +103,58 @@ internal object MachOInspector {
                     return Result(false, false, "Code signature data is out of bounds.")
                 }
                 hasCodeSignature = true
+                hasCodeDirectory = containsCodeDirectory(
+                    bytes, start + dataoff, datasize
+                )
             }
             cursor += cmdSize
         }
-        return Result(true, hasCodeSignature, if (hasCodeSignature) "Mach-O contains LC_CODE_SIGNATURE." else "Mach-O has no LC_CODE_SIGNATURE.")
+        return Result(
+            true, hasCodeSignature,
+            if (!hasCodeSignature) "Mach-O has no LC_CODE_SIGNATURE."
+            else if (hasCodeDirectory) "Mach-O contains a structurally valid CodeDirectory."
+            else "LC_CODE_SIGNATURE exists, but no valid CodeDirectory was found.",
+            hasCodeDirectory
+        )
+    }
+
+    /**
+     * Checks the embedded-signature SuperBlob and CodeDirectory bounds only.
+     * It does not validate code hashes, CMS, certificates, or Apple trust.
+     */
+    private fun containsCodeDirectory(bytes: ByteArray, offset: Int, size: Int): Boolean {
+        if (offset < 0 || size < 12 || offset.toLong() + size > bytes.size) return false
+        if (readU32(bytes, offset, false)?.toLong()?.and(0xffffffffL) != CSMAGIC_EMBEDDED_SIGNATURE) return false
+        val blobLength = readU32(bytes, offset + 4, false)?.toLong()?.and(0xffffffffL) ?: return false
+        val count = readU32(bytes, offset + 8, false)?.toLong()?.and(0xffffffffL) ?: return false
+        if (blobLength < 12 || blobLength > size || count > 4096 || 12L + count * 8L > blobLength) return false
+        repeat(count.toInt()) { index ->
+            val entry = offset + 12 + index * 8
+            val type = readU32(bytes, entry, false)?.toLong()?.and(0xffffffffL) ?: return false
+            val relative = readU32(bytes, entry + 4, false)?.toLong()?.and(0xffffffffL) ?: return false
+            if (type == CSSLOT_CODEDIRECTORY) {
+                if (relative + 44 > blobLength) return false
+                val cd = offset + relative.toInt()
+                val magic = readU32(bytes, cd, false)?.toLong()?.and(0xffffffffL) ?: return false
+                val cdLength = readU32(bytes, cd + 4, false)?.toLong()?.and(0xffffffffL) ?: return false
+                val hashOffset = readU32(bytes, cd + 16, false)?.toLong()?.and(0xffffffffL) ?: return false
+                val identOffset = readU32(bytes, cd + 20, false)?.toLong()?.and(0xffffffffL) ?: return false
+                val specialSlots = readU32(bytes, cd + 24, false)?.toLong()?.and(0xffffffffL) ?: return false
+                val codeSlots = readU32(bytes, cd + 28, false)?.toLong()?.and(0xffffffffL) ?: return false
+                val codeLimit = readU32(bytes, cd + 32, false)?.toLong()?.and(0xffffffffL) ?: return false
+                val hashSize = bytes[cd + 36].toInt() and 0xff
+                val hashType = bytes[cd + 37].toInt() and 0xff
+                val pageSize = bytes[cd + 39].toInt() and 0xff
+                if (magic != CSMAGIC_CODEDIRECTORY || cdLength < 44 || relative + cdLength > blobLength) return false
+                if (hashSize == 0 || hashType !in 1..4 || pageSize > 30 || identOffset >= cdLength) return false
+                if (codeSlots > 10_000_000 || specialSlots > 10_000) return false
+                if (hashOffset > cdLength || codeSlots * hashSize > cdLength - hashOffset) return false
+                if (specialSlots * hashSize > hashOffset) return false
+                if (codeLimit > Int.MAX_VALUE.toLong()) return false
+                return true
+            }
+        }
+        return false
     }
 
     private fun readU32(bytes: ByteArray, offset: Int, little: Boolean): Int? {
@@ -123,4 +182,7 @@ internal object MachOInspector {
             (bytes[offset + 3].toInt() and 0xff)
 
     private const val LC_CODE_SIGNATURE = 0x1d
+    private const val CSMAGIC_EMBEDDED_SIGNATURE = 0xfade0cc0L
+    private const val CSMAGIC_CODEDIRECTORY = 0xfade0c02L
+    private const val CSSLOT_CODEDIRECTORY = 0L
 }
