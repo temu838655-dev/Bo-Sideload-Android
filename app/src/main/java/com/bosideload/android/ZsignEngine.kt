@@ -84,19 +84,19 @@ internal class ZsignEngine(private val context: Context) {
                     SignResult(
                         true,
                         outputIpa,
-                        "zsign đã tạo IPA và kiểm tra cấu trúc đầu ra đạt. ${verification.message}\\n$details"
+                        "zsign đã tạo IPA và kiểm tra cấu trúc đầu ra đạt. ${verification.message}\n$details"
                     )
                 } else {
                     outputIpa.delete()
                     SignResult(
                         false,
                         null,
-                        "zsign trả mã thành công nhưng IPA đầu ra không vượt qua kiểm tra hậu ký: ${verification.message}\\n$details"
+                        "zsign trả mã thành công nhưng IPA đầu ra không vượt qua kiểm tra hậu ký: ${verification.message}\n$details"
                     )
                 }
             } else {
                 outputIpa.delete()
-                SignResult(false, null, "zsign không ký được IPA (mã thoát $exitCode).\\n$details")
+                SignResult(false, null, "zsign không ký được IPA (mã thoát $exitCode).\n$details")
             }
         } catch (error: Exception) {
             outputIpa.delete()
