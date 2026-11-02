@@ -38,7 +38,7 @@ internal object MachOInspector {
             return Result(false, false, "Truncated fat architecture table.")
         }
         var foundSignature = false
-        var allSignedSlicesHaveCodeDirectory = true
+        var allSlicesHaveCodeDirectory = true
         var signedSliceCount = 0
         repeat(count) { index ->
             val base = 8 + index * entrySize
@@ -61,13 +61,15 @@ internal object MachOInspector {
             if (slice.hasCodeSignatureCommand) {
                 foundSignature = true
                 signedSliceCount++
-                if (!slice.hasCodeDirectory) allSignedSlicesHaveCodeDirectory = false
+                if (!slice.hasCodeDirectory) allSlicesHaveCodeDirectory = false
+            } else {
+                allSlicesHaveCodeDirectory = false
             }
         }
         return Result(
             true, foundSignature,
             if (foundSignature) "Mach-O contains LC_CODE_SIGNATURE." else "Mach-O has no LC_CODE_SIGNATURE.",
-            foundSignature && signedSliceCount > 0 && allSignedSlicesHaveCodeDirectory
+            foundSignature && signedSliceCount == count && allSlicesHaveCodeDirectory
         )
     }
 
