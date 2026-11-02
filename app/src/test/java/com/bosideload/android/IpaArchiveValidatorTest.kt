@@ -37,7 +37,7 @@ class IpaArchiveValidatorTest {
     fun rejectsDuplicateZipEntryPaths() {
         val result = IpaArchiveValidator.validate(
             zipOf(
-                "Payload/Demo.app/Info.plist" to "first",
+                "Payload/Demo.app/Info.plist/" to "",
                 "Payload/Demo.app/Info.plist" to "second"
             )
         )
