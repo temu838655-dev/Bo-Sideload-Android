@@ -39,6 +39,30 @@ class IpaArchiveValidatorTest {
     }
 
     @Test
+    fun detectsSigningRelatedFilesWithoutClaimingVerification() {
+        val result = IpaArchiveValidator.validate(
+            zipOf(
+                "Payload/Demo.app/Info.plist" to "plist",
+                "Payload/Demo.app/_CodeSignature/CodeResources" to "signature data",
+                "Payload/Demo.app/embedded.mobileprovision" to "profile data"
+            )
+        )
+        assertTrue(result.valid)
+        assertTrue(result.hasCodeResources)
+        assertTrue(result.hasProvisioningProfile)
+    }
+
+    @Test
+    fun reportsMissingSigningRelatedFiles() {
+        val result = IpaArchiveValidator.validate(
+            zipOf("Payload/Demo.app/Info.plist" to "plist")
+        )
+        assertTrue(result.valid)
+        assertFalse(result.hasCodeResources)
+        assertFalse(result.hasProvisioningProfile)
+    }
+
+    @Test
     fun rejectsMultipleAppInfoPlists() {
         val result = IpaArchiveValidator.validate(
             zipOf(
