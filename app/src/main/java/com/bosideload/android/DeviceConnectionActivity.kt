@@ -73,7 +73,10 @@ class DeviceConnectionActivity : Activity() {
         setContentView(scroll)
         val filter = IntentFilter(permissionAction)
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(permissionReceiver, filter, RECEIVER_NOT_EXPORTED)
-        else {\n            @Suppress("DEPRECATION")\n            registerReceiver(permissionReceiver, filter)\n        }
+        else {
+            @Suppress("DEPRECATION")
+            registerReceiver(permissionReceiver, filter)
+        }
     }
 
     override fun onResume() {
