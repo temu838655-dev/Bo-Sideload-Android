@@ -82,9 +82,9 @@ class MainActivity : Activity() {
         val isIpa = name.lowercase(Locale.ROOT).endsWith(".ipa")
         fileInfo.text = buildString {
             append(if (isIpa) "Đã chọn tệp IPA" else "Tệp đã chọn — chưa xác nhận định dạng IPA")
-            append("\\nTên: ").append(name)
-            append("\\nDung lượng: ").append(if (size >= 0) formatSize(size) else "Không xác định")
-            append("\\nĐường dẫn nội dung: ").append(uri.scheme ?: "unknown")
+            append("\nTên: ").append(name)
+            append("\nDung lượng: ").append(if (size >= 0) formatSize(size) else "Không xác định")
+            append("\nĐường dẫn nội dung: ").append(uri.scheme ?: "unknown")
         }
     }
 
