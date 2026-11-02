@@ -54,3 +54,15 @@ gradle testDebugUnitTest assembleDebug
 The Android app includes a USB Host diagnostics screen. It lists attached USB devices, vendor/product IDs, interface counts, and whether Android USB permission has been granted. Apple vendor ID is only a preliminary hardware hint; it does not prove Apple Lockdown pairing.
 
 **Not yet implemented:** usbmuxd transport, Lockdown pairing/trust-record management, Wi-Fi pairing, device-information queries, and IPA installation. Upstream [ideviceinstaller](https://github.com/libimobiledevice/ideviceinstaller) and [libimobiledevice](https://github.com/libimobiledevice/libimobiledevice) report Android support, but bundling requires building and testing their complete native dependency chain for Android ABIs. The installer is GPL-2.0, so its licensing and source obligations must be handled before bundling.
+
+
+## Apple platform signing guidance (free Apple ID)
+
+The app now includes an Apple Signing Center explaining the Personal Team workflow and platform boundaries for iPhone/iPad, macOS, and tvOS. It can accept a profile or public certificate file for basic filename/size intake only; this first version does not decode CMS profiles, validate certificate chains, extract Team ID/Bundle ID/expiry, or store private keys.
+
+With a free Apple Account used as an Xcode Personal Team, Apple's current account guidance lists limits of 10 App IDs and 3 registered devices, both expiring after 7 days, and up to 3 installed apps per device. Re-provisioning is required after expiry. This is a personal development/testing workflow, not App Store or enterprise distribution. See [Apple's developer account overview](https://developer.apple.com/help/account/basics/about-your-developer-account/).
+
+- iOS/iPadOS: personal-device development/testing through Xcode Personal Team; re-sign/reinstall when the profile expires.
+- macOS: the app does not provide Developer ID signing or notarization; these require the appropriate Apple program capabilities and macOS tooling.
+- tvOS: requires a tvOS target, compatible provisioning profile, and Xcode signing. A generic iOS profile is not interchangeable.
+- Bo Sideload Android does not authenticate to Apple, create Apple-issued credentials, compile Xcode projects, or install to Apple devices directly.
