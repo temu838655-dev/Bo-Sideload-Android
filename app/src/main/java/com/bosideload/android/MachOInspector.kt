@@ -36,6 +36,7 @@ internal object MachOInspector {
             return Result(false, false, "Truncated fat architecture table.")
         }
         var foundSignature = false
+        var hasCodeDirectory = false
         repeat(count) { index ->
             val base = 8 + index * entrySize
             val offset = if (is64) {
