@@ -98,23 +98,32 @@ class DeviceConnectionActivity : Activity() {
         }
         devices.forEach { device ->
             val apple = device.vendorId == APPLE_VENDOR_ID
-            val card = TextView(this).apply {
+            val card = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(14), dp(12), dp(14), dp(12))
+                setBackgroundColor(0xFF162135.toInt())
+            }
+            card.addView(TextView(this).apply {
                 text = buildString {
-                    append(if (apple) "Thiết bị USB thuộc Apple (VID)\n" else "Thiết bị USB\n")
+                    append(if (apple) "Thiết bị USB thuộc Apple (VID)\\n" else "Thiết bị USB\\n")
                     append("Tên: ").append(device.deviceName)
-                    append("\nVendor ID: ").append(hex(device.vendorId))
+                    append("\\nVendor ID: ").append(hex(device.vendorId))
                     append("   Product ID: ").append(hex(device.productId))
-                    append("\nUSB class: ").append(device.deviceClass)
+                    append("\\nUSB class: ").append(device.deviceClass)
                     append("   Interfaces: ").append(device.interfaceCount)
-                    append("\nQuyền Android: ").append(if (usbManager.hasPermission(device)) "Đã cấp" else "Chưa cấp")
+                    append("\\nQuyền Android: ").append(if (usbManager.hasPermission(device)) "Đã cấp" else "Chưa cấp")
                 }
                 textSize = 13f
                 setTextColor(-1)
-                setPadding(dp(14), dp(14), dp(14), dp(14))
-                setBackgroundColor(0xFF162135.toInt())
+            })
+            if (!usbManager.hasPermission(device)) {
+                card.addView(Button(this).apply {
+                    text = "Cấp quyền truy cập USB"
+                    isAllCaps = false
+                    setOnClickListener { requestUsbPermission(device) }
+                })
             }
             devicesPanel.addView(card, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
-            if (!usbManager.hasPermission(device)) requestUsbPermission(device)
         }
         status.text = if (devices.any { it.vendorId == APPLE_VENDOR_ID }) {
             "Đã thấy VID Apple 05AC ở tầng USB. Chưa xác nhận Lockdown pairing hoặc khả năng cài ứng dụng."
