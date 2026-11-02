@@ -96,7 +96,7 @@ class AppleSigningGuideActivity : Activity() {
             else -> "Tệp chưa phân loại"
         }
         importedFileInfo.text = "Tên: $name\nLoại suy đoán theo phần mở rộng: $type\nDung lượng: " +
-            if (size >= 0) "$size bytes" else "không rõ" +
+            (if (size >= 0) "$size bytes" else "không rõ") +
             "\n\nChưa đọc nội dung hoặc xác minh chứng chỉ."
         Toast.makeText(this, "Đã nhận diện tệp (chưa xác minh).", Toast.LENGTH_SHORT).show()
     }
