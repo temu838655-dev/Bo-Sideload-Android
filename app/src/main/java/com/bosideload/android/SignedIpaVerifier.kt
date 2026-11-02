@@ -65,7 +65,7 @@ internal object SignedIpaVerifier {
 
         return Result(
             true,
-            "Đạt kiểm tra sau ký ở mức cấu trúc: ZIP đọc được, Bundle ID giữ nguyên, embedded.mobileprovision hiện diện; CodeDirectory chính khớp hash trang mã máy và hash CodeResources ở special slot 3. Chưa kiểm tra từng tài nguyên bên trong CodeResources, CMS, chuỗi chứng chỉ, CodeDirectory phụ hoặc độ tin cậy Apple.",
+            "Đạt kiểm tra sau ký ở mức cấu trúc: ZIP đọc được, Bundle ID giữ nguyên, embedded.mobileprovision hiện diện; CodeDirectory chính khớp hash trang mã máy, Info.plist ở special slot 1 và CodeResources ở special slot 3. Chưa kiểm tra từng tài nguyên bên trong CodeResources, CMS, chuỗi chứng chỉ, CodeDirectory phụ hoặc độ tin cậy Apple.",
             signedBundle
         )
     }
@@ -83,6 +83,20 @@ internal object SignedIpaVerifier {
                     }
                 }
                 val appPrefix = prefix ?: return null
+                val infoEntry = zip.getEntry(appPrefix + "Info.plist") ?: return null
+                if (infoEntry.isDirectory || infoEntry.size !in 1..MAX_INFO_PLIST_BYTES) return null
+                val infoOutput = ByteArrayOutputStream()
+                zip.getInputStream(infoEntry).use { input ->
+                    val buffer = ByteArray(8 * 1024)
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        if (infoOutput.size().toLong() + count > MAX_INFO_PLIST_BYTES) return null
+                        infoOutput.write(buffer, 0, count)
+                    }
+                }
+                val infoBytes = infoOutput.toByteArray()
+
                 val sealEntry = zip.getEntry(appPrefix + "_CodeSignature/CodeResources") ?: return null
                 if (sealEntry.isDirectory || sealEntry.size !in 1..MAX_CODE_RESOURCES_BYTES) return null
                 val sealOutput = ByteArrayOutputStream()
@@ -109,7 +123,7 @@ internal object SignedIpaVerifier {
                         output.write(buffer, 0, count)
                     }
                 }
-                MachOInspector.inspect(output.toByteArray(), sealBytes)
+                MachOInspector.inspect(output.toByteArray(), sealBytes, infoBytes)
             }
         } catch (_: Exception) {
             null
@@ -127,6 +141,7 @@ internal object SignedIpaVerifier {
 
     private const val MAX_EXECUTABLE_BYTES = 512L * 1024L * 1024L
     private const val MAX_CODE_RESOURCES_BYTES = 16L * 1024L * 1024L
+    private const val MAX_INFO_PLIST_BYTES = 1L * 1024L * 1024L
     private const val MAX_IPA_BYTES = 2L * 1024L * 1024L * 1024L
     private const val MAX_UNCOMPRESSED_BYTES = 2L * 1024L * 1024L * 1024L
     private const val MAX_ENTRIES = 100_000
