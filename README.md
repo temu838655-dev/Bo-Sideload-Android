@@ -29,3 +29,9 @@ Workflow có thể chạy bằng **Actions → Android APK → Run workflow** n�
 ## Tài liệu kỹ thuật
 
 - [Đánh giá tích hợp Rust iSideload trên Android](docs/ANDROID_PORTING_ASSESSMENT.md): các trở ngại JNI, Android ABI, lưu trữ bí mật, ghép đôi thiết bị và lộ trình kiểm thử.
+## Phát triển Android + iOS
+
+- [Kiến trúc hai nền tảng và ma trận tương thích TrollStore](docs/DUAL_PLATFORM_ARCHITECTURE.md)
+- [Workspace ứng dụng iOS native](ios/README.md)
+
+Bo Sideload Android là ứng dụng quản lý/điều phối; phần cài đặt vĩnh viễn kiểu TrollStore phải chạy trên iOS tương thích. Hiện workspace iOS mới là tài liệu khởi tạo, chưa phải ứng dụng cài đặt hoàn chỉnh.
