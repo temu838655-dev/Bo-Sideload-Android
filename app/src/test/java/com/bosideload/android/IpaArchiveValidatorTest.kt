@@ -23,6 +23,17 @@ class IpaArchiveValidatorTest {
     }
 
     @Test
+    fun rejectsMultipleAppInfoPlists() {
+        val result = IpaArchiveValidator.validate(
+            zipOf(
+                "Payload/First.app/Info.plist" to "first",
+                "Payload/Second.app/Info.plist" to "second"
+            )
+        )
+        assertFalse(result.valid)
+        assertTrue(result.message.contains("nhiều Info.plist"))
+    }
+    @Test
     fun rejectsPathTraversal() {
         val result = IpaArchiveValidator.validate(zipOf("../outside.txt" to "x"))
         assertFalse(result.valid)
