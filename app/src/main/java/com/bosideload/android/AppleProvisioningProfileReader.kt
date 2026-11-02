@@ -65,8 +65,8 @@ internal object AppleProvisioningProfileReader {
             teamIdentifiers = teamIds,
             applicationIdentifierPrefixes = appPrefixes,
             bundleIdentifier = applicationId?.let { appId ->
-                (teamIds + appPrefixes).firstOrNull { appId.startsWith("$" + "it.") }
-                    ?.let { prefix -> appId.removePrefix("$" + "prefix.") } ?: appId
+                (teamIds + appPrefixes).firstOrNull { appId.startsWith("${it}.") }
+                    ?.let { prefix -> appId.removePrefix("${prefix}.") } ?: appId
             },
             teamBundleIdentifier = applicationId,
             platforms = strings(root, "Platform"),
