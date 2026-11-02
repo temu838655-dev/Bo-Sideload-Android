@@ -143,8 +143,34 @@ class AppleSigningGuideActivity : Activity() {
                     Toast.makeText(this, "Đã phân tích nội dung profile (chưa xác minh chữ ký).", Toast.LENGTH_SHORT).show()
                 }
             }.start()
+        } else if (name.endsWith(".cer", true) || name.endsWith(".pem", true)) {
+            Thread {
+                val result = try {
+                    val bytes = contentResolver.openInputStream(uri)?.use { input ->
+                        val output = java.io.ByteArrayOutputStream()
+                        val buffer = ByteArray(8 * 1024)
+                        var total = 0
+                        while (true) {
+                            val count = input.read(buffer)
+                            if (count < 0) break
+                            total += count
+                            require(total <= 2 * 1024 * 1024) { "Certificate vượt giới hạn 2 MB." }
+                            output.write(buffer, 0, count)
+                        }
+                        output.toByteArray()
+                    } ?: throw IllegalStateException("Không mở được certificate.")
+                    val info = AppleCertificateReader.read(bytes)
+                    "Tệp: $name\nLoại: X.509 public certificate\n\n${info.summary()}\n\nLưu ý: chưa xác minh chuỗi tin cậy Apple, thu hồi chứng chỉ hoặc khóa riêng tương ứng."
+                } catch (error: Exception) {
+                    "Không đọc được certificate: ${error.message ?: "định dạng không hợp lệ"}\n\nTệp: $name"
+                }
+                runOnUiThread {
+                    importedFileInfo.text = result
+                    Toast.makeText(this, "Đã đọc thông tin certificate công khai.", Toast.LENGTH_SHORT).show()
+                }
+            }.start()
         } else {
-            importedFileInfo.text = "Tên: $name\nLoại: $type\n\nChỉ hỗ trợ đọc nội dung provisioning profile ở phiên bản này. Chứng chỉ .cer/.pem và P12 chưa được xác minh."
+            importedFileInfo.text = "Tên: $name\nLoại: $type\n\nP12 chứa khóa riêng chưa được đọc ở màn hình này. Không chia sẻ mật khẩu P12 trong chat."
         }
     }
 
