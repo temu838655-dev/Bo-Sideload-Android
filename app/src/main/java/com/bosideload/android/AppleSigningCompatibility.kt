@@ -48,16 +48,18 @@ internal object AppleSigningCompatibility {
             errors += "P12 không có certificate X.509 để đối chiếu."
         } else {
             val profileHashes = profile.developerCertificateSha256.toSet()
-            if (profileHashes.isEmpty()) {
+            val matchingCertificates = if (profileHashes.isEmpty()) {
                 warnings += "Profile không cung cấp DeveloperCertificates để so fingerprint."
-            } else if (certificates.none { it.sha256Fingerprint in profileHashes }) {
-                errors += "Không có certificate trong P12 khớp fingerprint DeveloperCertificates của profile."
+                certificates
+            } else {
+                certificates.filter { it.sha256Fingerprint in profileHashes }.also {
+                    if (it.isEmpty()) {
+                        errors += "Không có certificate trong P12 khớp fingerprint DeveloperCertificates của profile."
+                    }
+                }
             }
-            if (certificates.none { it.hasPrivateKey }) {
-                errors += "P12 không chứa private key; không thể dùng làm khóa ký."
-            }
-            if (certificates.none { !it.notAfter.before(now) }) {
-                errors += "Certificate trong P12 đã hết hạn."
+            if (matchingCertificates.none { it.hasPrivateKey && !it.notAfter.before(now) }) {
+                errors += "Không tìm thấy cùng một certificate vừa khớp profile, có private key và còn hạn."
             }
         }
 
@@ -81,6 +83,15 @@ internal object AppleSigningCompatibility {
         password: String,
         now: Date = Date()
     ): Check {
+        require(ipaFile.isFile && ipaFile.length() in 1..MAX_IPA_BYTES) {
+            "IPA không tồn tại, rỗng hoặc vượt giới hạn 2 GB."
+        }
+        require(p12File.isFile && p12File.length() in 1..MAX_CREDENTIAL_BYTES) {
+            "P12 không tồn tại, rỗng hoặc vượt giới hạn 10 MB."
+        }
+        require(profileFile.isFile && profileFile.length() in 1..MAX_CREDENTIAL_BYTES) {
+            "Provisioning profile không tồn tại, rỗng hoặc vượt giới hạn 10 MB."
+        }
         val metadata = readIpaMetadata(ipaFile)
             ?: return Check(false, listOf("Không đọc được Info.plist / CFBundleIdentifier từ IPA."), emptyList())
         val profile = AppleProvisioningProfileReader.read(profileFile.readBytes())
@@ -98,7 +109,7 @@ internal object AppleSigningCompatibility {
         java.util.zip.ZipInputStream(file.inputStream().buffered()).use { zip ->
             while (true) {
                 val entry = zip.nextEntry ?: break
-                if (!entry.isDirectory && entry.name.matches(Regex("^Payload/[^/]+\\\\.app/Info\\\\.plist$"))) {
+                if (!entry.isDirectory && isAppInfoPlistPath(entry.name)) {
                     val output = java.io.ByteArrayOutputStream()
                     val buffer = ByteArray(8 * 1024)
                     while (true) {
@@ -115,6 +126,9 @@ internal object AppleSigningCompatibility {
         return null
     }
 
+    internal fun isAppInfoPlistPath(path: String): Boolean =
+        APP_INFO_PLIST_PATTERN.matches(path)
+
     internal fun matchesApplicationIdentifier(profileApplicationId: String, bundleId: String): Boolean {
         val separator = profileApplicationId.indexOf('.')
         if (separator <= 0 || separator == profileApplicationId.lastIndex) return false
@@ -126,4 +140,8 @@ internal object AppleSigningCompatibility {
         }
         return allowedBundle == bundleId
     }
+
+    private const val MAX_IPA_BYTES = 2L * 1024L * 1024L * 1024L
+    private const val MAX_CREDENTIAL_BYTES = 10L * 1024L * 1024L
+    private val APP_INFO_PLIST_PATTERN = Regex("^Payload/[^/]+\\.app/Info\\.plist$")
 }
