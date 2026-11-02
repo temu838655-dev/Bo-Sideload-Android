@@ -91,11 +91,11 @@ class AppleSigningGuideActivity : Activity() {
         if (requestCode != 701 || resultCode != RESULT_OK) return
         val uri: Uri = data?.data ?: return
         val name = queryName(uri)
-        val type = when {
+        profileCertificateFingerprints = emptySet()\n        profileTeamIds = emptySet()\n        profileBundleIdentifier = null\n        val type = when {
             name.endsWith(".mobileprovision", true) -> "Provisioning profile iOS / tvOS"
             name.endsWith(".provisionprofile", true) -> "Provisioning profile macOS"
             name.endsWith(".cer", true) || name.endsWith(".pem", true) -> "Certificate công khai"
-            name.endsWith(".p12", true) -> "P12 chứa khóa riêng — không phân tích trong màn hình này"
+            name.endsWith(".p12", true) -> "P12 chứa khóa riêng — đọc cục bộ bằng mật khẩu"
             else -> "Tệp chưa phân loại"
         }
         importedFileInfo.text = "Đang đọc $name…"
