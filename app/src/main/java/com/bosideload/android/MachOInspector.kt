@@ -38,7 +38,8 @@ internal object MachOInspector {
             return Result(false, false, "Truncated fat architecture table.")
         }
         var foundSignature = false
-        var hasCodeDirectory = false
+        var allSignedSlicesHaveCodeDirectory = true
+        var signedSliceCount = 0
         repeat(count) { index ->
             val base = 8 + index * entrySize
             val offset = if (is64) {
@@ -57,13 +58,16 @@ internal object MachOInspector {
             }
             val slice = inspectThin(bytes, offset.toInt(), size.toInt())
             if (!slice.isMachO) return slice
-            foundSignature = foundSignature || slice.hasCodeSignatureCommand
-            hasCodeDirectory = hasCodeDirectory || slice.hasCodeDirectory
+            if (slice.hasCodeSignatureCommand) {
+                foundSignature = true
+                signedSliceCount++
+                if (!slice.hasCodeDirectory) allSignedSlicesHaveCodeDirectory = false
+            }
         }
         return Result(
             true, foundSignature,
             if (foundSignature) "Mach-O contains LC_CODE_SIGNATURE." else "Mach-O has no LC_CODE_SIGNATURE.",
-            hasCodeDirectory
+            foundSignature && signedSliceCount > 0 && allSignedSlicesHaveCodeDirectory
         )
     }
 
@@ -105,10 +109,11 @@ internal object MachOInspector {
                 if (datasize == 0 || dataoff.toLong() + datasize > length) {
                     return Result(false, false, "Code signature data is out of bounds.")
                 }
-                hasCodeSignature = true
-                hasCodeDirectory = containsCodeDirectory(
+                val directoryValid = containsCodeDirectory(
                     bytes, start + dataoff, datasize, start, length
                 )
+                hasCodeDirectory = if (hasCodeSignature) hasCodeDirectory && directoryValid else directoryValid
+                hasCodeSignature = true
             }
             cursor += cmdSize
         }
@@ -121,10 +126,6 @@ internal object MachOInspector {
         )
     }
 
-    /**
-     * Checks the embedded-signature SuperBlob and CodeDirectory bounds only.
-     * It does not validate code hashes, CMS, certificates, or Apple trust.
-     */
     /**
      * Validates the primary CodeDirectory structure and its code-page hashes.
      * This is not CMS/certificate-chain verification and does not validate alternate
