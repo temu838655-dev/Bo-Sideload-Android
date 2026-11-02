@@ -48,6 +48,16 @@ class MachOInspectorTest {
     }
 
     @Test
+    fun rejectsCodePageHashMismatch() {
+        val bytes = thinMachO(includeSignature = true)
+        bytes[8] = (bytes[8].toInt() xor 0x01).toByte()
+        val result = MachOInspector.inspect(bytes)
+        assertTrue(result.isMachO)
+        assertTrue(result.hasCodeSignatureCommand)
+        assertFalse(result.hasCodeDirectory)
+    }
+
+    @Test
     fun rejectsCodeDirectoryOutsideSuperBlob() {
         val bytes = thinMachO(includeSignature = true)
         val signatureStart = 48
@@ -95,7 +105,7 @@ class MachOInspectorTest {
     private fun thinMachO(includeSignature: Boolean): ByteArray {
         val headerSize = 32
         val commandSize = if (includeSignature) 16 else 0
-        val signatureSize = if (includeSignature) 65 else 0
+        val signatureSize = if (includeSignature) 97 else 0
         val bytes = ByteArray(headerSize + commandSize + signatureSize)
         putBe(bytes, 0, -17958193)
         putBe(bytes, 4, 0x0100000C)
@@ -119,19 +129,22 @@ class MachOInspectorTest {
             putBe(bytes, blob + 16, 20) // CodeDirectory starts after SuperBlob index.
             val cd = blob + 20
             putBe(bytes, cd, 0xfade0c02.toInt())
-            putBe(bytes, cd + 4, 45)
+            putBe(bytes, cd + 4, 77)
             putBe(bytes, cd + 8, 0x20001) // version
             putBe(bytes, cd + 12, 0)
-            putBe(bytes, cd + 16, 44) // hashOffset
+            putBe(bytes, cd + 16, 45) // hashOffset
             putBe(bytes, cd + 20, 44) // identifier offset
             putBe(bytes, cd + 24, 0) // special slots
-            putBe(bytes, cd + 28, 0) // code slots
-            putBe(bytes, cd + 32, 0) // codeLimit
-            bytes[cd + 36] = 20
+            putBe(bytes, cd + 28, 1) // code slots
+            putBe(bytes, cd + 32, 32) // codeLimit
+            bytes[cd + 36] = 32
             bytes[cd + 37] = 2 // SHA-256
             bytes[cd + 38] = 0
             bytes[cd + 39] = 12 // 4 KB pages
             bytes[cd + 44] = 0 // empty identifier terminator
+            val pageHash = java.security.MessageDigest.getInstance("SHA-256")
+                .digest(bytes.copyOfRange(0, 32))
+            pageHash.copyInto(bytes, cd + 45)
         }
         return bytes
     }
