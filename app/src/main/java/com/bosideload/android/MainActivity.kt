@@ -1,6 +1,7 @@
 package com.bosideload.android
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Intent
 import android.database.Cursor
 import android.graphics.Color
@@ -11,16 +12,29 @@ import android.provider.OpenableColumns
 import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.EditText
 import android.widget.LinearLayout
+import android.text.InputType
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import java.io.File
+import java.io.FileOutputStream
 import java.util.Locale
 
 class MainActivity : Activity() {
     private lateinit var resultPanel: TextView
     private lateinit var recentPanel: LinearLayout
     private lateinit var importButton: Button
+    private lateinit var p12Button: Button
+    private lateinit var profileButton: Button
+    private lateinit var signButton: Button
+    private lateinit var signingStatus: TextView
+    private var selectedIpaUri: Uri? = null
+    private var selectedIpaName: String = "BoSideload-signed.ipa"
+    private var p12Uri: Uri? = null
+    private var profileUri: Uri? = null
+    private var pendingSignedFile: File? = null
     private lateinit var store: RecentIpaStore
     private val pageColor = Color.rgb(8, 14, 27)
     private val panelColor = Color.rgb(22, 33, 53)
@@ -57,6 +71,41 @@ class MainActivity : Activity() {
         }
         page.addView(importButton, fullWidth())
 
+        page.addView(label("KÝ IPA NGAY TRÊN ANDROID", 18f, Color.WHITE, true).apply {
+            setPadding(0, dp(24), 0, dp(10))
+        }, fullWidth())
+        page.addView(label(
+            "Chọn IPA, chứng chỉ .p12 và provisioning profile hợp lệ. Bo Sideload dùng bộ máy zsign chạy cục bộ trên thiết bị ARM.",
+            13f, secondaryText, false
+        ).apply { setPadding(0, 0, 0, dp(8)) }, fullWidth())
+        p12Button = Button(this).apply {
+            text = "①  Chọn chứng chỉ .p12"
+            isAllCaps = false
+            setOnClickListener { chooseCredential(PICK_P12) }
+        }
+        page.addView(p12Button, fullWidth())
+        profileButton = Button(this).apply {
+            text = "②  Chọn provisioning profile"
+            isAllCaps = false
+            setOnClickListener { chooseCredential(PICK_PROFILE) }
+        }
+        page.addView(profileButton, fullWidth())
+        signButton = Button(this).apply {
+            text = "③  Ký lại IPA bằng zsign"
+            isAllCaps = false
+            isEnabled = false
+            setOnClickListener { showSigningPasswordDialog() }
+        }
+        page.addView(signButton, fullWidth())
+        signingStatus = label(
+            "Chưa chọn đủ IPA, chứng chỉ và provisioning profile.",
+            13f, secondaryText, false
+        ).apply {
+            setPadding(dp(14), dp(12), dp(14), dp(12))
+            setBackgroundColor(panelColor)
+        }
+        page.addView(signingStatus, fullWidth().apply { topMargin = dp(8) })
+
         resultPanel = label("Chưa có tệp nào được kiểm tra.\nChọn một tệp IPA để bắt đầu.", 14f, Color.WHITE, false).apply {
             setPadding(dp(16), dp(16), dp(16), dp(16))
             setBackgroundColor(panelColor)
@@ -68,27 +117,13 @@ class MainActivity : Activity() {
         recentPanel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         page.addView(recentPanel, fullWidth())
 
-        page.addView(label("TRUNG TÂM CÔNG CỤ", 18f, Color.WHITE, true).apply {
+        page.addView(label("BỘ MÁY VÀ GIỚI HẠN", 18f, Color.WHITE, true).apply {
             setPadding(0, dp(28), 0, dp(12))
         }, fullWidth())
-        addToolCard(
-            page,
-            "Xcode — Công cụ phát triển iOS của Apple",
-            "Chạy trên macOS. Dùng để tạo dự án, quản lý signing identity / provisioning profile và cài bản build lên thiết bị đã kết nối. Không thể chạy Xcode trực tiếp trên Android.",
-            "Mở trang Apple Xcode",
-            "https://developer.apple.com/xcode/"
-        )
-        addToolCard(
-            page,
-            "Cydia Impactor — Công cụ đời cũ",
-            "Công cụ sideload IPA trên máy tính. Trang dự án lưu ý từ cuối năm 2019 việc cài IPA cần tài khoản Apple Developer trả phí. Đây không phải chức năng chạy bên trong Bo Sideload; hãy thận trọng với bản tải từ trang không chính thức.",
-            "Mở trang Cydia Impactor",
-            "https://www.cydiaimpactor.com/"
-        )
         page.addView(label(
-            "Lưu ý: ứng dụng nhận diện tệp CodeResources và embedded.mobileprovision nhưng chưa xác minh mật mã chữ ký, chứng chỉ, provisioning profile hoặc khả năng cài đặt IPA lên iPhone.",
+            "Bộ ký: zsign Android 1.1.2 (MIT), chạy cục bộ. Có thể ký lại IPA bằng P12 và provisioning profile. Việc ký không đồng nghĩa iPhone chắc chắn cài được. Kết nối USB/Wi-Fi và cài ứng dụng trực tiếp lên iPhone chưa được triển khai trong bản này.",
             12f, secondaryText, false
-        ).apply { setPadding(dp(4), dp(20), dp(4), 0) }, fullWidth())
+        ).apply { setPadding(dp(4), dp(8), dp(4), 0) }, fullWidth())
         setContentView(scroll)
         renderRecent()
     }
@@ -123,6 +158,133 @@ class MainActivity : Activity() {
         parent.addView(card, fullWidth().apply { bottomMargin = dp(10) })
     }
 
+    private fun chooseCredential(requestCode: Int) {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+        }
+        startActivityForResult(intent, requestCode)
+    }
+
+    private fun updateSignButton() {
+        if (!::signButton.isInitialized) return
+        signButton.isEnabled = selectedIpaUri != null && p12Uri != null && profileUri != null
+    }
+
+    private fun showSigningPasswordDialog() {
+        val passwordInput = EditText(this).apply {
+            hint = "Mật khẩu P12"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setSingleLine(true)
+        }
+        val container = LinearLayout(this).apply {
+            setPadding(dp(22), dp(8), dp(22), 0)
+            addView(passwordInput, fullWidth())
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Mật khẩu chứng chỉ")
+            .setMessage("Mật khẩu chỉ dùng trong lần ký này, không được lưu vào lịch sử.")
+            .setView(container)
+            .setNegativeButton("Hủy", null)
+            .setPositiveButton("Ký IPA") { _, _ ->
+                val password = passwordInput.text.toString()
+                passwordInput.text?.clear()
+                startSigning(password)
+            }
+            .show()
+    }
+
+    private fun startSigning(password: String) {
+        val ipaUri = selectedIpaUri ?: return
+        val certificateUri = p12Uri ?: return
+        val provisioningUri = profileUri ?: return
+        signButton.isEnabled = false
+        signingStatus.text = "Đang chuẩn bị tệp và chạy zsign trên thiết bị…"
+        Thread {
+            var result: ZsignEngine.SignResult
+            var signedFile: File? = null
+            try {
+                val workDir = File(cacheDir, "signing-work").apply {
+                    deleteRecursively()
+                    mkdirs()
+                }
+                val input = copyUriToFile(ipaUri, File(workDir, "source.ipa"), MAX_IPA_BYTES)
+                val p12 = copyUriToFile(certificateUri, File(workDir, "certificate.p12"), MAX_CREDENTIAL_BYTES)
+                val profile = copyUriToFile(provisioningUri, File(workDir, "profile.mobileprovision"), MAX_CREDENTIAL_BYTES)
+                val output = File(cacheDir, "BoSideload-${System.currentTimeMillis()}-signed.ipa")
+                result = ZsignEngine(this).sign(input, p12, profile, password, output)
+                if (result.success) signedFile = result.output
+                p12.delete()
+                profile.delete()
+                input.delete()
+                workDir.deleteRecursively()
+            } catch (error: Exception) {
+                result = ZsignEngine.SignResult(
+                    false, null,
+                    "Không thể chuẩn bị tệp ký: ${error.message ?: "lỗi không xác định"}"
+                )
+            }
+            runOnUiThread {
+                signButton.isEnabled = true
+                signingStatus.text = result.message
+                if (result.success && signedFile != null) {
+                    pendingSignedFile = signedFile
+                    val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                        addCategory(Intent.CATEGORY_OPENABLE)
+                        type = "application/octet-stream"
+                        putExtra(Intent.EXTRA_TITLE, selectedIpaName)
+                    }
+                    startActivityForResult(intent, CREATE_SIGNED_IPA)
+                }
+                updateSignButton()
+            }
+        }.start()
+    }
+
+    private fun copyUriToFile(uri: Uri, destination: File, maxBytes: Long): File {
+        val input = contentResolver.openInputStream(uri)
+            ?: throw IllegalStateException("Không mở được tệp đã chọn.")
+        input.use { source ->
+            FileOutputStream(destination).use { output ->
+                val buffer = ByteArray(32 * 1024)
+                var total = 0L
+                while (true) {
+                    val count = source.read(buffer)
+                    if (count < 0) break
+                    total += count
+                    if (total > maxBytes) {
+                        destination.delete()
+                        throw IllegalArgumentException("Tệp vượt giới hạn kích thước an toàn.")
+                    }
+                    output.write(buffer, 0, count)
+                }
+            }
+        }
+        return destination
+    }
+
+    private fun exportSignedIpa(destination: Uri) {
+        val source = pendingSignedFile
+        if (source == null || !source.isFile) {
+            signingStatus.text = "Không còn tệp IPA đã ký để xuất."
+            return
+        }
+        Thread {
+            val message = try {
+                val output = contentResolver.openOutputStream(destination)
+                    ?: throw IllegalStateException("Không mở được vị trí lưu.")
+                output.use { target -> source.inputStream().use { it.copyTo(target) } }
+                source.delete()
+                "✓ Đã xuất IPA đã ký. Bạn vẫn cần phương thức cài đặt tương thích và profile hợp lệ trên iPhone."
+            } catch (error: Exception) {
+                "Không xuất được IPA: ${error.message ?: "lỗi không xác định"}"
+            }
+            pendingSignedFile = null
+            runOnUiThread { signingStatus.text = message }
+        }.start()
+    }
+
     private fun chooseIpa() {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
@@ -135,17 +297,37 @@ class MainActivity : Activity() {
     @Deprecated("Deprecated in Android")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode != PICK_FILE || resultCode != RESULT_OK) return
+        if (resultCode != RESULT_OK) return
         val uri = data?.data ?: return
-        try {
-            contentResolver.takePersistableUriPermission(uri, data.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        } catch (_: Exception) {
-            // The provider may grant temporary access only.
+        when (requestCode) {
+            PICK_FILE, PICK_P12, PICK_PROFILE -> {
+                try {
+                    contentResolver.takePersistableUriPermission(uri, data.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                } catch (_: Exception) {
+                    // The provider may grant temporary access only.
+                }
+                when (requestCode) {
+                    PICK_FILE -> inspect(uri, true)
+                    PICK_P12 -> {
+                        p12Uri = uri
+                        p12Button.text = "✓  Chứng chỉ: ${displayName(uri)}"
+                        updateSignButton()
+                    }
+                    PICK_PROFILE -> {
+                        profileUri = uri
+                        profileButton.text = "✓  Profile: ${displayName(uri)}"
+                        updateSignButton()
+                    }
+                }
+            }
+            CREATE_SIGNED_IPA -> exportSignedIpa(uri)
         }
-        inspect(uri, true)
     }
 
     private fun inspect(uri: Uri, remember: Boolean) {
+        selectedIpaUri = uri
+        selectedIpaName = displayName(uri).substringBeforeLast('.', displayName(uri)) + "-signed.ipa"
+        updateSignButton()
         val name = displayName(uri)
         val size = fileSize(uri)
         if (remember) {
@@ -302,5 +484,10 @@ class MainActivity : Activity() {
 
     companion object {
         private const val PICK_FILE = 100
+        private const val PICK_P12 = 101
+        private const val PICK_PROFILE = 102
+        private const val CREATE_SIGNED_IPA = 103
+        private const val MAX_IPA_BYTES = 512L * 1024L * 1024L
+        private const val MAX_CREDENTIAL_BYTES = 20L * 1024L * 1024L
     }
 }
