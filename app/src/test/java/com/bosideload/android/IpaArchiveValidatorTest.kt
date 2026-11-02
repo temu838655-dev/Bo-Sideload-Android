@@ -34,6 +34,18 @@ class IpaArchiveValidatorTest {
         assertTrue(result.message.contains("nhiều Info.plist"))
     }
     @Test
+    fun rejectsDuplicateZipEntryPaths() {
+        val result = IpaArchiveValidator.validate(
+            zipOf(
+                "Payload/Demo.app/Info.plist" to "first",
+                "Payload/Demo.app/Info.plist" to "second"
+            )
+        )
+        assertFalse(result.valid)
+        assertTrue(result.message.contains("đường dẫn bị lặp"))
+    }
+
+    @Test
     fun rejectsPathTraversal() {
         val result = IpaArchiveValidator.validate(zipOf("../outside.txt" to "x"))
         assertFalse(result.valid)
