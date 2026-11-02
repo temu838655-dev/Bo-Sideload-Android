@@ -111,6 +111,11 @@ class MainActivity : Activity() {
                 val stream = contentResolver.openInputStream(uri)
                 if (stream == null) IpaArchiveValidator.Result(false, "Không thể mở tệp.")
                 else stream.use { IpaArchiveValidator.validate(it) }
+            } catch (error: SecurityException) {
+                IpaArchiveValidator.Result(
+                    false,
+                    "Android không còn cấp quyền đọc tệp này. Hãy chọn lại IPA từ bộ chọn tệp để cấp quyền truy cập mới."
+                )
             } catch (error: Exception) {
                 IpaArchiveValidator.Result(false, "Không thể đọc tệp: ${error.message ?: "lỗi không xác định"}")
             }
