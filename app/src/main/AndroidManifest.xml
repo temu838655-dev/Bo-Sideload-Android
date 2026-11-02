@@ -6,6 +6,9 @@
         android:label="Bo Sideload"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity
+            android:name=".AppleSigningGuideActivity"
+            android:exported="false" />
+        <activity
             android:name=".DeviceConnectionActivity"
             android:exported="false" />
         <activity
