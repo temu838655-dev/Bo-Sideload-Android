@@ -213,16 +213,17 @@ internal object MachOInspector {
                             val absoluteBlob = offset + relativeBlob.toInt()
                             val blobMagic = readU32(bytes, absoluteBlob, false)?.toLong()?.and(0xffffffffL) ?: return false
                             val blobSize = readU32(bytes, absoluteBlob + 4, false)?.toLong()?.and(0xffffffffL) ?: return false
-                            if (blobMagic != CSMAGIC_EMBEDDED_ENTITLEMENTS || blobSize < 8 || relativeBlob + blobSize > blobLength) return false
+                            if (blobMagic != CSMAGIC_EMBEDDED_ENTITLEMENTS || blobSize < 8 ||
+                                blobSize > MAX_ENTITLEMENTS_BLOB_BYTES || relativeBlob + blobSize > blobLength) return false
                             entitlementsOffset = absoluteBlob
                             entitlementsLength = blobSize.toInt()
                         }
                     }
                     if (entitlementsOffset < 0 || entitlementsLength < 0) return false
                     val entitlementHashAt = cd + hashOffset.toInt() - CSSLOT_ENTITLEMENTS * hashSize
-                    val entitlementDigest = MessageDigest.getInstance(algorithm).digest(
-                        bytes.copyOfRange(entitlementsOffset, entitlementsOffset + entitlementsLength)
-                    )
+                    val entitlementDigestEngine = MessageDigest.getInstance(algorithm)
+                    entitlementDigestEngine.update(bytes, entitlementsOffset, entitlementsLength)
+                    val entitlementDigest = entitlementDigestEngine.digest()
                     for (i in 0 until hashSize) {
                         if (bytes[entitlementHashAt + i] != entitlementDigest[i]) return false
                     }
@@ -301,4 +302,5 @@ internal object MachOInspector {
     private const val CSSLOT_INFOSLOT = 1
     private const val CSSLOT_RESOURCEDIR = 3
     private const val CSSLOT_ENTITLEMENTS = 5
+    private const val MAX_ENTITLEMENTS_BLOB_BYTES = 1L * 1024L * 1024L
 }
