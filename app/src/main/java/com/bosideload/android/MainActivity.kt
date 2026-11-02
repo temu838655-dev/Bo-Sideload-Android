@@ -13,7 +13,6 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import java.util.Locale
-import java.util.zip.ZipInputStream
 
 class MainActivity : Activity() {
     private lateinit var fileInfo: TextView
@@ -59,7 +58,7 @@ class MainActivity : Activity() {
             }
         }
         val warning = TextView(this).apply {
-            text = "Kiểm tra này chỉ xác nhận cấu trúc ZIP cơ bản và sự hiện diện của Payload/<ứng dụng>.app/Info.plist. Nó KHÔNG xác minh chữ ký, chứng chỉ, khả năng cài đặt hoặc thay thế quy trình ký và cài ứng dụng Apple."
+            text = "Bo Sideload hiện kiểm tra cấu trúc ZIP cơ bản và tìm Info.plist. Ứng dụng chưa xác minh chữ ký, chứng chỉ hoặc khả năng cài đặt IPA."
             textSize = 13f
             setTextColor(Color.rgb(190, 200, 215))
             gravity = Gravity.CENTER
@@ -83,76 +82,40 @@ class MainActivity : Activity() {
         } catch (_: SecurityException) {
             // Temporary read access is sufficient for this validation.
         }
+
         val name = queryName(uri)
         val size = querySize(uri)
         val isIpa = name.lowercase(Locale.ROOT).endsWith(".ipa")
         fileInfo.text = buildString {
             append(if (isIpa) "Đang kiểm tra tệp IPA…" else "Đang kiểm tra tệp được chọn…")
-            append("\nTên: ").append(name)
-            append("\nDung lượng: ").append(if (size >= 0) formatSize(size) else "Không xác định")
+            append("\\nTên: ").append(name)
+            append("\\nDung lượng: ").append(if (size >= 0) formatSize(size) else "Không xác định")
         }
         chooseButton.isEnabled = false
+
         Thread {
-            val result = validateIpa(uri)
+            val result = try {
+                val input = contentResolver.openInputStream(uri)
+                if (input == null) {
+                    IpaArchiveValidator.Result(false, "Không thể mở tệp để đọc.")
+                } else {
+                    input.use { IpaArchiveValidator.validate(it) }
+                }
+            } catch (e: Exception) {
+                IpaArchiveValidator.Result(false, "Không thể đọc tệp: ${e.message ?: "lỗi không xác định"}")
+            }
+
             runOnUiThread {
                 chooseButton.isEnabled = true
                 fileInfo.text = buildString {
                     append(if (isIpa) "KẾT QUẢ KIỂM TRA IPA" else "KẾT QUẢ KIỂM TRA TỆP")
-                    append("\nTên: ").append(name)
-                    append("\nDung lượng: ").append(if (size >= 0) formatSize(size) else "Không xác định")
-                    append("\n\n").append(result.message)
-                    append("\n\nLưu ý: Đây không phải kiểm tra chữ ký hoặc khả năng cài đặt.")
+                    append("\\nTên: ").append(name)
+                    append("\\nDung lượng: ").append(if (size >= 0) formatSize(size) else "Không xác định")
+                    append("\\n\\n").append(result.message)
+                    append("\\n\\nLưu ý: Đây không phải kiểm tra chữ ký hoặc khả năng cài đặt.")
                 }
             }
         }.start()
-    }
-
-    private data class ValidationResult(val valid: Boolean, val message: String)
-
-    private fun validateIpa(uri: Uri): ValidationResult {
-        return try {
-            val input = contentResolver.openInputStream(uri)
-                ?: return ValidationResult(false, "Không thể mở tệp để đọc.")
-            input.use { raw ->
-                ZipInputStream(raw.buffered()).use { zip ->
-                    var entryCount = 0
-                    var totalBytes = 0L
-                    var foundInfoPlist = false
-                    val buffer = ByteArray(16 * 1024)
-                    while (true) {
-                        val entry = zip.nextEntry ?: break
-                        entryCount++
-                        if (entryCount > MAX_ENTRIES) {
-                            return ValidationResult(false, "Tệp có quá nhiều mục ZIP; đã dừng để bảo vệ thiết bị.")
-                        }
-                        val path = entry.name.replace('\\', '/')
-                        if (path.startsWith('/') || path.split('/').any { it == ".." }) {
-                            return ValidationResult(false, "Tệp chứa đường dẫn ZIP không an toàn.")
-                        }
-                        if (INFO_PLIST_PATTERN.matches(path)) foundInfoPlist = true
-                        if (!entry.isDirectory) {
-                            while (true) {
-                                val read = zip.read(buffer)
-                                if (read < 0) break
-                                totalBytes += read
-                                if (totalBytes > MAX_UNCOMPRESSED_BYTES) {
-                                    return ValidationResult(false, "Dữ liệu giải nén vượt giới hạn an toàn 512 MB.")
-                                }
-                            }
-                        }
-                        zip.closeEntry()
-                    }
-                    if (entryCount == 0) return ValidationResult(false, "Không tìm thấy nội dung ZIP hợp lệ.")
-                    if (!foundInfoPlist) {
-                        ValidationResult(false, "Không tìm thấy Payload/<ứng dụng>.app/Info.plist. Đây có thể không phải IPA chuẩn.")
-                    } else {
-                        ValidationResult(true, "Đã đọc cấu trúc ZIP và tìm thấy Info.plist trong thư mục Payload. Cấu trúc IPA cơ bản có vẻ hợp lệ.")
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            ValidationResult(false, "Không thể đọc hoặc giải mã tệp ZIP: ${e.message ?: "lỗi không xác định"}")
-        }
     }
 
     private fun queryName(uri: Uri): String {
@@ -190,8 +153,5 @@ class MainActivity : Activity() {
 
     companion object {
         private const val PICK_IPA = 100
-        private const val MAX_ENTRIES = 100_000
-        private const val MAX_UNCOMPRESSED_BYTES = 512L * 1024L * 1024L
-        private val INFO_PLIST_PATTERN = Regex("^Payload/[^/]+\\.app/Info\\.plist$")
     }
 }
