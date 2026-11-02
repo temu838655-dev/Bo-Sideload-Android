@@ -5,6 +5,9 @@
         android:label="Bo Sideload"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity
+            android:name=".SwiftWorkspaceActivity"
+            android:exported="false" />
+        <activity
             android:name=".MainActivity"
             android:exported="true">
             <intent-filter>
