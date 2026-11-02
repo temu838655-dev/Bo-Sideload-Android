@@ -48,6 +48,17 @@ class MachOInspectorTest {
     }
 
     @Test
+    fun rejectsCodeDirectoryOutsideSuperBlob() {
+        val bytes = thinMachO(includeSignature = true)
+        val signatureStart = 48
+        putBe(bytes, signatureStart + 16, 0x7fffffff)
+        val result = MachOInspector.inspect(bytes)
+        assertTrue(result.isMachO)
+        assertTrue(result.hasCodeSignatureCommand)
+        assertFalse(result.hasCodeDirectory)
+    }
+
+    @Test
     fun detectsFatMachOWithSignedSlice() {
         val slice = thinMachO(includeSignature = true)
         val offset = 28
