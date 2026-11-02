@@ -10,6 +10,7 @@ Bo Sideload is an Android app for inspecting IPA packages and **re-signing them 
 - Keep a recent IPA list and share source files.
 - Select a `.p12` signing identity and `.mobileprovision` profile.
 - Enter the P12 password for one signing operation; the app does not save it in history or preferences.
+- Open and edit Swift / plist / entitlements text files in the lightweight source workspace (up to 2 MB per source file); export edited source files.
 - Run zsign locally on Android and export the resulting signed IPA with Android's document picker.
 - Package verified zsign binaries for `arm64-v8a` and `armeabi-v7a` in the APK.
 
@@ -18,8 +19,8 @@ Bo Sideload is an Android app for inspecting IPA packages and **re-signing them 
 - Supply a valid P12 certificate/private key and a provisioning profile that authorizes the target Bundle ID, device(s), entitlements, and signing identity.
 - The app currently signs with the supplied P12 and profile. It does **not** obtain Apple certificates, create profiles, authenticate to an Apple Developer account, or bypass Apple's signing rules.
 - A successful zsign process means an output IPA was generated; it does not guarantee iOS will accept or launch it. The iPhone validates Apple's signature chain and provisioning authorization.
-- **Direct installation to an iPhone from Android is not implemented yet.** The bundled zsign CLI's `-i` option relies on `ideviceinstaller`; this APK does not bundle a tested Android USB-mux / pairing / Installation Proxy stack. Do not interpret "signed" as "installed".
-- This is not Xcode: Android cannot bundle Apple's proprietary Xcode, iOS SDK, or Apple build environment. Bo Sideload can process and re-sign an existing IPA, but cannot currently compile a full native iOS project into an IPA on Android.
+- **Direct installation to an iPhone from Android is not implemented yet.** A native device-transport research plan is in [docs/ANDROID_IPHONE_INSTALL_RESEARCH.md](docs/ANDROID_IPHONE_INSTALL_RESEARCH.md). The bundled zsign CLI's `-i` option relies on `ideviceinstaller`; this APK does not bundle a tested Android USB-mux / pairing / Installation Proxy stack. Do not interpret "signed" as "installed".
+- This is not Xcode: the source workspace is a lightweight text editor, not a full IDE. Android cannot bundle Apple's proprietary Xcode, iOS SDK, or Apple build environment. Bo Sideload can edit source text and process/re-sign an existing IPA, but cannot compile a full native iOS project into an IPA on Android.
 - Supported native engine ABIs: `arm64-v8a` and `armeabi-v7a`. Other CPU architectures are not packaged.
 
 ## Upstream engine and license
