@@ -48,7 +48,7 @@ internal object SignedIpaVerifier {
 
         val executable = output.metadata?.executable?.takeIf { it.isNotBlank() }
             ?: return Result(false, "Info.plist không khai báo CFBundleExecutable.")
-        if (executable.contains("/") || executable.contains("\\\\") || executable == "." || executable == "..") {
+        if (executable.contains("/") || executable.contains("\\") || executable == "." || executable == "..") {
             return Result(false, "CFBundleExecutable chứa tên tệp không an toàn.")
         }
         val machO = inspectMainExecutable(outputIpa, executable)
@@ -65,7 +65,7 @@ internal object SignedIpaVerifier {
 
         return Result(
             true,
-            "Đạt kiểm tra cấu trúc sau ký: ZIP đọc được, Bundle ID giữ nguyên, CodeResources và embedded.mobileprovision hiện diện; Mach-O chính có LC_CODE_SIGNATURE và CodeDirectory đạt kiểm tra cấu trúc. Chưa đối chiếu hash mã máy, xác minh CMS, chuỗi chứng chỉ hoặc độ tin cậy Apple.",
+            "Đạt kiểm tra sau ký ở mức cấu trúc và hash trang mã máy: ZIP đọc được, Bundle ID giữ nguyên, CodeResources và embedded.mobileprovision hiện diện; Mach-O chính có LC_CODE_SIGNATURE và CodeDirectory chính khớp hash trang mã máy. Chưa xác minh CMS, chuỗi chứng chỉ, resource seal, CodeDirectory phụ hoặc độ tin cậy Apple.",
             signedBundle
         )
     }
