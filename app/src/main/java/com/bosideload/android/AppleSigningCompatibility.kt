@@ -28,8 +28,13 @@ internal object AppleSigningCompatibility {
             errors += "Không đọc được CFBundleIdentifier trong IPA."
         } else if (appIdentifier.isNullOrBlank()) {
             errors += "Profile không có Entitlements.application-identifier."
-        } else if (!matchesApplicationIdentifier(appIdentifier, bundleId)) {
-            errors += "Bundle ID của IPA không khớp application-identifier trong profile."
+        } else {
+            if (!matchesApplicationIdentifier(appIdentifier, bundleId)) {
+                errors += "Bundle ID của IPA không khớp application-identifier trong profile."
+            }
+            if (!hasKnownProfilePrefix(appIdentifier, profile.teamIdentifiers, profile.applicationIdentifierPrefixes)) {
+                errors += "Prefix của application-identifier không khớp TeamIdentifier hoặc ApplicationIdentifierPrefix trong profile."
+            }
         }
 
         if (profile.expirationDate == null) {
@@ -58,8 +63,10 @@ internal object AppleSigningCompatibility {
                     }
                 }
             }
-            if (matchingCertificates.none { it.hasPrivateKey && !it.notAfter.before(now) }) {
-                errors += "Không tìm thấy cùng một certificate vừa khớp profile, có private key và còn hạn."
+            if (matchingCertificates.none {
+                    it.hasPrivateKey && isCertificateValidAt(it.notBefore, it.notAfter, now)
+                }) {
+                errors += "Không tìm thấy cùng một certificate vừa khớp profile, có private key và đang trong thời hạn hiệu lực."
             }
         }
 
@@ -128,6 +135,20 @@ internal object AppleSigningCompatibility {
 
     internal fun isAppInfoPlistPath(path: String): Boolean =
         APP_INFO_PLIST_PATTERN.matches(path)
+
+    internal fun hasKnownProfilePrefix(
+        applicationIdentifier: String,
+        teamIdentifiers: List<String>,
+        applicationIdentifierPrefixes: List<String>
+    ): Boolean {
+        val separator = applicationIdentifier.indexOf('.')
+        if (separator <= 0) return false
+        val prefix = applicationIdentifier.substring(0, separator)
+        return prefix in teamIdentifiers || prefix in applicationIdentifierPrefixes
+    }
+
+    internal fun isCertificateValidAt(notBefore: Date, notAfter: Date, now: Date): Boolean =
+        !now.before(notBefore) && !now.after(notAfter)
 
     internal fun matchesApplicationIdentifier(profileApplicationId: String, bundleId: String): Boolean {
         val separator = profileApplicationId.indexOf('.')
