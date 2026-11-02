@@ -45,7 +45,7 @@ class AppleSigningGuideActivity : Activity() {
             setPadding(0, dp(24), 0, dp(8))
         }, full())
         page.addView(text(
-            "Chọn tệp provisioning profile (.mobileprovision / .provisionprofile) hoặc chứng chỉ công khai (.cer). Bản hiện tại chỉ ghi nhận tên và dung lượng để bạn phân loại; chưa giải mã CMS, xác thực chữ ký, đọc Team ID, Bundle ID hay ngày hết hạn.",
+            "Chọn tệp provisioning profile (.mobileprovision / .provisionprofile) hoặc chứng chỉ công khai (.cer). Bo Sideload có thể giải mã phần CMS/plist để đọc metadata, nhưng chưa xác minh chữ ký CMS hoặc chuỗi tin cậy Apple.",
             13, muted, false
         ), full())
         page.addView(Button(this).apply {
@@ -85,20 +85,63 @@ class AppleSigningGuideActivity : Activity() {
         if (requestCode != 701 || resultCode != RESULT_OK) return
         val uri: Uri = data?.data ?: return
         val name = queryName(uri)
-        val size = try {
-            contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: -1L
-        } catch (_: Exception) { -1L }
         val type = when {
-            name.endsWith(".mobileprovision", true) -> "Provisioning profile iOS/tvOS"
+            name.endsWith(".mobileprovision", true) -> "Provisioning profile iOS / tvOS"
             name.endsWith(".provisionprofile", true) -> "Provisioning profile macOS"
             name.endsWith(".cer", true) || name.endsWith(".pem", true) -> "Certificate công khai"
-            name.endsWith(".p12", true) -> "P12 chứa khóa riêng — không nhập vào màn hình kiểm tra này"
+            name.endsWith(".p12", true) -> "P12 chứa khóa riêng — không phân tích trong màn hình này"
             else -> "Tệp chưa phân loại"
         }
-        importedFileInfo.text = "Tên: $name\nLoại suy đoán theo phần mở rộng: $type\nDung lượng: " +
-            (if (size >= 0) "$size bytes" else "không rõ") +
-            "\n\nChưa đọc nội dung hoặc xác minh chứng chỉ."
-        Toast.makeText(this, "Đã nhận diện tệp (chưa xác minh).", Toast.LENGTH_SHORT).show()
+        importedFileInfo.text = "Đang đọc $name…"
+        if (name.endsWith(".mobileprovision", true) ||
+            name.endsWith(".provisionprofile", true) ||
+            name.endsWith(".plist", true)
+        ) {
+            Thread {
+                val result = try {
+                    val bytes = contentResolver.openInputStream(uri)?.use { input ->
+                        val output = java.io.ByteArrayOutputStream()
+                        val buffer = ByteArray(16 * 1024)
+                        var total = 0
+                        while (true) {
+                            val count = input.read(buffer)
+                            if (count < 0) break
+                            total += count
+                            require(total <= 10 * 1024 * 1024) { "Tệp vượt giới hạn 10 MB." }
+                            output.write(buffer, 0, count)
+                        }
+                        output.toByteArray()
+                    } ?: throw IllegalStateException("Không mở được tệp.")
+                    val info = AppleProvisioningProfileReader.read(bytes)
+                    val expired = info.expirationDate?.before(java.util.Date()) == true
+                    val platformNote = when {
+                        info.platforms.any { it.equals("tvOS", true) } -> "Profile có khai báo tvOS."
+                        info.platforms.any { it.equals("macOS", true) } -> "Profile có khai báo macOS."
+                        info.platforms.any { it.equals("iOS", true) } -> "Profile có khai báo iOS."
+                        else -> "Không xác định được nền tảng từ trường Platform."
+                    }
+                    buildString {
+                        appendLine("Tệp: $name")
+                        appendLine("Loại: $type")
+                        appendLine(platformNote)
+                        appendLine()
+                        appendLine(info.summary())
+                        appendLine()
+                        append(if (expired) "CẢNH BÁO: Profile đã hết hạn." else "Profile chưa quá hạn theo ngày ghi trong tệp.")
+                        appendLine()
+                        append("Lưu ý: đã đọc nội dung CMS/plist; chưa xác minh chữ ký CMS, chuỗi tin cậy Apple, thu hồi chứng chỉ hoặc khả năng cài trên thiết bị.")
+                    }
+                } catch (error: Exception) {
+                    "Không đọc được profile: ${error.message ?: "định dạng không hợp lệ"}\n\nTệp: $name"
+                }
+                runOnUiThread {
+                    importedFileInfo.text = result
+                    Toast.makeText(this, "Đã phân tích nội dung profile (chưa xác minh chữ ký).", Toast.LENGTH_SHORT).show()
+                }
+            }.start()
+        } else {
+            importedFileInfo.text = "Tên: $name\nLoại: $type\n\nChỉ hỗ trợ đọc nội dung provisioning profile ở phiên bản này. Chứng chỉ .cer/.pem và P12 chưa được xác minh."
+        }
     }
 
     private fun queryName(uri: Uri): String {
