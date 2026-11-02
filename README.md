@@ -47,3 +47,10 @@ Run the workflow's zsign download/verification step first so that `app/src/main/
 ```bash
 gradle testDebugUnitTest assembleDebug
 ```
+
+
+## USB device diagnostics
+
+The Android app includes a USB Host diagnostics screen. It lists attached USB devices, vendor/product IDs, interface counts, and whether Android USB permission has been granted. Apple vendor ID is only a preliminary hardware hint; it does not prove Apple Lockdown pairing.
+
+**Not yet implemented:** usbmuxd transport, Lockdown pairing/trust-record management, Wi-Fi pairing, device-information queries, and IPA installation. Upstream [ideviceinstaller](https://github.com/libimobiledevice/ideviceinstaller) and [libimobiledevice](https://github.com/libimobiledevice/libimobiledevice) report Android support, but bundling requires building and testing their complete native dependency chain for Android ABIs. The installer is GPL-2.0, so its licensing and source obligations must be handled before bundling.
