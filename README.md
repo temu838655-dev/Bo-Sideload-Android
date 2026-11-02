@@ -14,7 +14,7 @@ Dự án này chỉ phát triển ứng dụng Android. Không xây dựng ứng
 - Tìm `Payload/<ứng dụng>.app/Info.plist`.
 - Đọc metadata cơ bản từ plist XML và binary: tên ứng dụng, Bundle ID, phiên bản, mã bản dựng (nếu đọc được).
 - Giới hạn dữ liệu plist được phân tích ở 1 MB.
-- Từ chối đường dẫn ZIP không an toàn.
+- Từ chối đường dẫn ZIP không an toàn và đường dẫn mục ZIP bị trùng/xung đột.
 - Giới hạn số lượng mục và tổng dữ liệu giải nén để giảm nguy cơ tệp ZIP độc hại.
 
 ## Giới hạn hiện tại
