@@ -67,12 +67,60 @@ class MainActivity : Activity() {
         }, fullWidth())
         recentPanel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         page.addView(recentPanel, fullWidth())
+
+        page.addView(label("TRUNG TÂM CÔNG CỤ", 18f, Color.WHITE, true).apply {
+            setPadding(0, dp(28), 0, dp(12))
+        }, fullWidth())
+        addToolCard(
+            page,
+            "Xcode — Công cụ phát triển iOS của Apple",
+            "Chạy trên macOS. Dùng để tạo dự án, quản lý signing identity / provisioning profile và cài bản build lên thiết bị đã kết nối. Không thể chạy Xcode trực tiếp trên Android.",
+            "Mở trang Apple Xcode",
+            "https://developer.apple.com/xcode/"
+        )
+        addToolCard(
+            page,
+            "Cydia Impactor — Công cụ đời cũ",
+            "Công cụ sideload IPA trên máy tính. Trang dự án lưu ý từ cuối năm 2019 việc cài IPA cần tài khoản Apple Developer trả phí. Đây không phải chức năng chạy bên trong Bo Sideload; hãy thận trọng với bản tải từ trang không chính thức.",
+            "Mở trang Cydia Impactor",
+            "https://www.cydiaimpactor.com/"
+        )
         page.addView(label(
             "Lưu ý: ứng dụng chỉ kiểm tra cấu trúc ZIP cơ bản. Chưa xác minh chữ ký, chứng chỉ hoặc khả năng cài đặt IPA lên iPhone.",
             12f, secondaryText, false
         ).apply { setPadding(dp(4), dp(20), dp(4), 0) }, fullWidth())
         setContentView(scroll)
         renderRecent()
+    }
+
+    private fun addToolCard(
+        parent: LinearLayout,
+        title: String,
+        description: String,
+        buttonText: String,
+        url: String
+    ) {
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(14), dp(14), dp(14), dp(12))
+            setBackgroundColor(panelColor)
+        }
+        card.addView(label(title, 16f, Color.WHITE, true), fullWidth())
+        card.addView(label(description, 13f, secondaryText, false).apply {
+            setPadding(0, dp(8), 0, dp(10))
+        }, fullWidth())
+        card.addView(Button(this).apply {
+            text = buttonText
+            isAllCaps = false
+            setOnClickListener {
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                } catch (_: Exception) {
+                    Toast.makeText(this@MainActivity, "Không thể mở liên kết.", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }, fullWidth())
+        parent.addView(card, fullWidth().apply { bottomMargin = dp(10) })
     }
 
     private fun chooseIpa() {
@@ -136,7 +184,10 @@ class MainActivity : Activity() {
                     } else if (result.valid) {
                         append("\n\nKhông đọc được metadata. Info.plist có thể bị lỗi hoặc dùng định dạng không được hỗ trợ.")
                     }
-                    append("\n\nKhông phải kết quả xác minh chữ ký hoặc khả năng cài đặt.")
+                    append("\n\nKIỂM TRA TỆP KÝ")
+                    append("\nCodeResources: ").append(if (result.hasCodeResources) "Có" else "Không tìm thấy")
+                    append("\nembedded.mobileprovision: ").append(if (result.hasProvisioningProfile) "Có" else "Không tìm thấy")
+                    append("\nLưu ý: chỉ nhận diện tệp, không xác minh chữ ký mật mã hay chứng chỉ.")
                 }
             }
         }.start()
