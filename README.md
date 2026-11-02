@@ -25,3 +25,7 @@ Workflow hiện tải APK lên Actions Artifacts mỗi lần push lên `main`. G
 ## Build thủ công
 
 Workflow có thể chạy bằng **Actions → Android APK → Run workflow** nếu cấu hình workflow cho phép.
+
+## Tài liệu kỹ thuật
+
+- [Đánh giá tích hợp Rust iSideload trên Android](docs/ANDROID_PORTING_ASSESSMENT.md): các trở ngại JNI, Android ABI, lưu trữ bí mật, ghép đôi thiết bị và lộ trình kiểm thử.
