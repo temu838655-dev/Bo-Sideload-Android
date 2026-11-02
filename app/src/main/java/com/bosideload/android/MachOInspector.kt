@@ -9,7 +9,7 @@ internal object MachOInspector {
 
     fun inspect(bytes: ByteArray): Result {
         if (bytes.size < 4) return Result(false, false, "Executable too small.")
-        val magic = u32be(bytes, 0)
+        val magic = u32be(bytes, 0).toLong() and 0xffffffffL
         return when (magic) {
             0xFEEDFACE, 0xFEEDFACF, 0xCEFAEDFE, 0xCFFAEDFE ->
                 inspectThin(bytes, 0, bytes.size)
@@ -21,7 +21,7 @@ internal object MachOInspector {
 
     private fun inspectFat(bytes: ByteArray): Result {
         if (bytes.size < 8) return Result(false, false, "Truncated fat header.")
-        val magic = u32be(bytes, 0)
+        val magic = u32be(bytes, 0).toLong() and 0xffffffffL
         val is64 = magic == 0xCAFEBABF || magic == 0xBFBAFECA
         val little = magic == 0xBEBAFECA || magic == 0xBFBAFECA
         val count = readU32(bytes, 4, little) ?: return Result(false, false, "Invalid architecture count.")
@@ -34,8 +34,11 @@ internal object MachOInspector {
         repeat(count) { index ->
             val base = 8 + index * entrySize
             val offset = readU32(bytes, base + 8, little) ?: return Result(false, false, "Invalid slice offset.")
-            val size = if (is64) readU64(bytes, base + 16, little) else readU32(bytes, base + 12, little)?.toLong()
-                ?: return Result(false, false, "Invalid slice size.")
+            val size = if (is64) {
+                readU64(bytes, base + 16, little) ?: return Result(false, false, "Invalid slice size.")
+            } else {
+                readU32(bytes, base + 12, little)?.toLong() ?: return Result(false, false, "Invalid slice size.")
+            }
             if (offset < 0 || size <= 0 || offset.toLong() + size > bytes.size) {
                 return Result(false, false, "Mach-O slice is out of bounds.")
             }
@@ -50,7 +53,7 @@ internal object MachOInspector {
         if (length < 28 || start < 0 || start.toLong() + length > bytes.size) {
             return Result(false, false, "Truncated Mach-O header.")
         }
-        val magic = u32be(bytes, start)
+        val magic = u32be(bytes, start).toLong() and 0xffffffffL
         val little = magic == 0xCEFAEDFE || magic == 0xCFFAEDFE
         val is64 = magic == 0xFEEDFACF || magic == 0xCFFAEDFE
         if (magic != 0xFEEDFACE && magic != 0xFEEDFACF &&
