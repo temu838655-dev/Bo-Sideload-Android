@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <application
+    <uses-feature android:name="android.hardware.usb.host" android:required="false" />\n    <application
         android:allowBackup="true"
         android:label="Bo Sideload"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
