@@ -104,6 +104,7 @@ class AppleSigningGuideActivity : Activity() {
             name.endsWith(".plist", true)
         ) {
             Thread {
+                var parsedProfile: AppleProvisioningProfileReader.ProfileInfo? = null
                 val result = try {
                     val bytes = contentResolver.openInputStream(uri)?.use { input ->
                         val output = java.io.ByteArrayOutputStream()
@@ -119,6 +120,7 @@ class AppleSigningGuideActivity : Activity() {
                         output.toByteArray()
                     } ?: throw IllegalStateException("Không mở được tệp.")
                     val info = AppleProvisioningProfileReader.read(bytes)
+                    parsedProfile = info
                     val expiryStatus = when {
                         info.expirationDate == null -> "Không xác định được ngày hết hạn trong profile."
                         info.expirationDate.before(java.util.Date()) -> "CẢNH BÁO: Profile đã hết hạn."
@@ -145,15 +147,11 @@ class AppleSigningGuideActivity : Activity() {
                     "Không đọc được profile: ${error.message ?: "định dạng không hợp lệ"}\n\nTệp: $name"
                 }
                 runOnUiThread {
-                    try {
-                        val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                        if (bytes != null) {
-                            val parsed = AppleProvisioningProfileReader.read(bytes)
-                            profileCertificateFingerprints = parsed.developerCertificateSha256.toSet()
-                            profileTeamIds = parsed.teamIdentifiers.toSet()
-                            profileBundleIdentifier = parsed.bundleIdentifier
-                        }
-                    } catch (_: Exception) { }
+                    parsedProfile?.let { parsed ->
+                        profileCertificateFingerprints = parsed.developerCertificateSha256.toSet()
+                        profileTeamIds = parsed.teamIdentifiers.toSet()
+                        profileBundleIdentifier = parsed.bundleIdentifier
+                    }
                     importedFileInfo.text = result
                     Toast.makeText(this, "Đã phân tích nội dung profile (chưa xác minh chữ ký).", Toast.LENGTH_SHORT).show()
                 }
@@ -250,7 +248,7 @@ class AppleSigningGuideActivity : Activity() {
                     } catch (error: Exception) {
                         "Không mở được P12: ${error.message ?: "sai mật khẩu hoặc tệp không hợp lệ"}"
                     } finally {
-                        password.fill('\\u0000')
+                        password.fill('\u0000')
                     }
                     runOnUiThread {
                         importedFileInfo.text = result
