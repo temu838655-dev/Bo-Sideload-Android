@@ -222,8 +222,8 @@ class MainActivity : Activity() {
                     result = ZsignEngine(this).sign(input, p12, profile, password, output)
                     if (result.success) signedFile = result.output
                     if (preflight.warnings.isNotEmpty()) {
-                        result = result.copy(message = result.message + "\\n\\nKIỂM TRA TRƯỚC KHI KÝ\\n" +
-                            preflight.warnings.joinToString("\\n") { "• $it" })
+                        result = result.copy(message = result.message + "\n\nKIỂM TRA TRƯỚC KHI KÝ\n" +
+                            preflight.warnings.joinToString("\n") { "• $it" })
                     }
                 }
                 p12.delete()
