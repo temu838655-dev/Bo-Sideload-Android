@@ -7,11 +7,12 @@ Bo Sideload is an Android APK that imports, inspects, modifies within supported 
 ## Core modules
 
 1. **IPA library:** document picker, recent files, metadata and export.
-2. **IPA inspector:** ZIP path validation, size/entry limits, Info.plist parsing and signing-file presence checks.
-3. **Signing engine:** upstream zsign v1.1.2 CLI for Android arm64-v8a and armeabi-v7a.
-4. **Credential input:** user-selected P12 and provisioning profile; P12 password entered per operation and not persisted.
-5. **Output manager:** run zsign in app-private storage and export the resulting IPA with Android's document picker.
-6. **Device install (future):** USB/Wi-Fi pairing, lockdown/usbmux transport, AFC and Installation Proxy require a separate Android-compatible implementation and real-device tests.
+2. **Code workspace:** lightweight source editor for Swift/plist/entitlements text; no iOS compiler or SDK.
+3. **IPA inspector:** ZIP path validation, size/entry limits, Info.plist parsing and signing-file presence checks.
+4. **Signing engine:** upstream zsign v1.1.2 CLI for Android arm64-v8a and armeabi-v7a.
+5. **Credential input:** user-selected P12 and provisioning profile; P12 password entered per operation and not persisted.
+6. **Output manager:** run zsign in app-private storage and export the resulting IPA with Android's document picker.
+7. **Device install (future):** USB/Wi-Fi pairing, lockdown/usbmux transport, AFC and Installation Proxy require a separate Android-compatible implementation and real-device tests.
 
 ## Upstream and license
 
@@ -35,6 +36,7 @@ Bo Sideload is an Android APK that imports, inspects, modifies within supported 
 - [x] IPA structure and metadata inspection.
 - [x] Add Android zsign signing engine for ARM ABIs.
 - [x] Add P12/profile selection and signed IPA export UI.
+- [x] Add lightweight Swift/plist source editing and export.
 - [ ] Validate the engine on physical Android devices.
 - [ ] Add certificate and provisioning profile preflight inspection.
 - [ ] Add optional bundle metadata editor with profile compatibility checks.
