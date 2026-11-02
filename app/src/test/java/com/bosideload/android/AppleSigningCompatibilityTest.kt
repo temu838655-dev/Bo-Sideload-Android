@@ -14,6 +14,39 @@ class AppleSigningCompatibilityTest {
     }
 
     @Test
+    fun profileApplicationIdentifierMustUseKnownTeamPrefix() {
+        assertTrue(AppleSigningCompatibility.hasKnownProfilePrefix(
+            "ABCDE12345.com.example.app",
+            listOf("ABCDE12345"),
+            emptyList()
+        ))
+        assertTrue(AppleSigningCompatibility.hasKnownProfilePrefix(
+            "OLDPREFIX.com.example.app",
+            emptyList(),
+            listOf("OLDPREFIX")
+        ))
+        assertFalse(AppleSigningCompatibility.hasKnownProfilePrefix(
+            "WRONGTEAM.com.example.app",
+            listOf("ABCDE12345"),
+            listOf("OLDPREFIX")
+        ))
+    }
+
+    @Test
+    fun certificateMustBeInsideItsValidityWindow() {
+        val now = java.util.Date(1_000_000L)
+        assertTrue(AppleSigningCompatibility.isCertificateValidAt(
+            java.util.Date(900_000L), java.util.Date(1_100_000L), now
+        ))
+        assertFalse(AppleSigningCompatibility.isCertificateValidAt(
+            java.util.Date(1_100_000L), java.util.Date(1_200_000L), now
+        ))
+        assertFalse(AppleSigningCompatibility.isCertificateValidAt(
+            java.util.Date(800_000L), java.util.Date(900_000L), now
+        ))
+    }
+
+    @Test
     fun matchesExactBundleIdentifier() {
         assertTrue(AppleSigningCompatibility.matchesApplicationIdentifier(
             "ABCDE12345.com.example.app", "com.example.app"
