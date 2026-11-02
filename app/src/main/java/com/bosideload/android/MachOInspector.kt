@@ -33,16 +33,21 @@ internal object MachOInspector {
         var foundSignature = false
         repeat(count) { index ->
             val base = 8 + index * entrySize
-            val offset = readU32(bytes, base + 8, little) ?: return Result(false, false, "Invalid slice offset.")
+            val offset = if (is64) {
+                readU64(bytes, base + 8, little) ?: return Result(false, false, "Invalid slice offset.")
+            } else {
+                readU32(bytes, base + 8, little)?.toLong() ?: return Result(false, false, "Invalid slice offset.")
+            }
             val size = if (is64) {
                 readU64(bytes, base + 16, little) ?: return Result(false, false, "Invalid slice size.")
             } else {
                 readU32(bytes, base + 12, little)?.toLong() ?: return Result(false, false, "Invalid slice size.")
             }
-            if (offset < 0 || size <= 0 || offset.toLong() + size > bytes.size) {
+            if (offset < 0 || size <= 0 || offset > Int.MAX_VALUE || size > Int.MAX_VALUE ||
+                offset + size > bytes.size.toLong()) {
                 return Result(false, false, "Mach-O slice is out of bounds.")
             }
-            val slice = inspectThin(bytes, offset, size.toInt())
+            val slice = inspectThin(bytes, offset.toInt(), size.toInt())
             if (!slice.isMachO) return slice
             foundSignature = foundSignature || slice.hasCodeSignatureCommand
         }
@@ -62,15 +67,17 @@ internal object MachOInspector {
         }
         val headerSize = if (is64) 32 else 28
         if (length < headerSize) return Result(false, false, "Truncated Mach-O header.")
-        val ncmds = readU32(bytes, start + 16, little) ?: return Result(false, false, "Invalid ncmds.")
-        val sizeofcmds = readU32(bytes, start + 20, little) ?: return Result(false, false, "Invalid sizeofcmds.")
-        if (ncmds > 65535 || sizeofcmds > length - headerSize) {
+        val ncmds = readU32(bytes, start + 16, little)?.toLong()?.and(0xffffffffL)
+            ?: return Result(false, false, "Invalid ncmds.")
+        val sizeofcmds = readU32(bytes, start + 20, little)?.toLong()?.and(0xffffffffL)
+            ?: return Result(false, false, "Invalid sizeofcmds.")
+        if (ncmds > 65535L || sizeofcmds > (length - headerSize).toLong()) {
             return Result(false, false, "Mach-O load commands exceed slice bounds.")
         }
         var cursor = start + headerSize
-        val commandsEnd = cursor + sizeofcmds
+        val commandsEnd = cursor + sizeofcmds.toInt()
         var hasCodeSignature = false
-        repeat(ncmds) {
+        repeat(ncmds.toInt()) {
             if (cursor + 8 > commandsEnd) return Result(false, false, "Truncated load command.")
             val cmd = readU32(bytes, cursor, little) ?: return Result(false, false, "Invalid load command.")
             val cmdSize = readU32(bytes, cursor + 4, little) ?: return Result(false, false, "Invalid load command size.")
