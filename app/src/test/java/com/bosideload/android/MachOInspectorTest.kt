@@ -130,7 +130,7 @@ class MachOInspectorTest {
             val cd = blob + 20
             putBe(bytes, cd, 0xfade0c02.toInt())
             putBe(bytes, cd + 4, 77)
-            putBe(bytes, cd + 8, 0x20001) // version
+            putBe(bytes, cd + 8, 0x20000) // version 2.0: 44-byte fixed header
             putBe(bytes, cd + 12, 0)
             putBe(bytes, cd + 16, 45) // hashOffset
             putBe(bytes, cd + 20, 44) // identifier offset
