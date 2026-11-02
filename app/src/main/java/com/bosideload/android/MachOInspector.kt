@@ -190,8 +190,11 @@ internal object MachOInspector {
                 var pageOffset = 0L
                 repeat(codeSlots.toInt()) { slot ->
                     val pageLength = minOf(pageBytes, codeLimit - pageOffset).toInt()
-                    val digest = MessageDigest.getInstance(algorithm)
-                        .digest(bytes.copyOfRange(codeStart + pageOffset.toInt(), codeStart + pageOffset.toInt() + pageLength))
+                    // Hash directly from the executable buffer. Avoid allocating a second
+                    // byte array for every page (executables may be hundreds of MB).
+                    val digestEngine = MessageDigest.getInstance(algorithm)
+                    digestEngine.update(bytes, codeStart + pageOffset.toInt(), pageLength)
+                    val digest = digestEngine.digest()
                     val expectedAt = hashStart + slot * hashSize
                     for (i in 0 until hashSize) {
                         if (bytes[expectedAt + i] != digest[i]) return false
