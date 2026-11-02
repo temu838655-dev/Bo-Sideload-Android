@@ -39,6 +39,14 @@ jobs:
           file app/src/main/assets/zsign/armeabi-v7a/zsign | grep -q 'ARM'
       - name: Build debug APK
         run: gradle testDebugUnitTest assembleDebug
+      - name: Verify signing engines are packaged in APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="$(find app/build/outputs/apk/debug -maxdepth 1 -name '*.apk' -print -quit)"
+          test -n "$APK"
+          unzip -l "$APK" | grep -q 'assets/zsign/arm64-v8a/zsign'
+          unzip -l "$APK" | grep -q 'assets/zsign/armeabi-v7a/zsign'
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
