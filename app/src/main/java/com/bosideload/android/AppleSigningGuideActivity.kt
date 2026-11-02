@@ -91,7 +91,9 @@ class AppleSigningGuideActivity : Activity() {
         if (requestCode != 701 || resultCode != RESULT_OK) return
         val uri: Uri = data?.data ?: return
         val name = queryName(uri)
-        profileCertificateFingerprints = emptySet()\n        profileTeamIds = emptySet()\n        profileBundleIdentifier = null\n        val type = when {
+        profileCertificateFingerprints = emptySet()
+        profileTeamIds = emptySet()
+        profileBundleIdentifier = null\n        val type = when {
             name.endsWith(".mobileprovision", true) -> "Provisioning profile iOS / tvOS"
             name.endsWith(".provisionprofile", true) -> "Provisioning profile macOS"
             name.endsWith(".cer", true) || name.endsWith(".pem", true) -> "Certificate công khai"
