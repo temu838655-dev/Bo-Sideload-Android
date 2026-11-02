@@ -107,7 +107,7 @@ internal object MachOInspector {
                 }
                 hasCodeSignature = true
                 hasCodeDirectory = containsCodeDirectory(
-                    bytes, start + dataoff, datasize
+                    bytes, start + dataoff, datasize, start, length
                 )
             }
             cursor += cmdSize
@@ -130,7 +130,7 @@ internal object MachOInspector {
      * This is not CMS/certificate-chain verification and does not validate alternate
      * CodeDirectories, resource seals, or Apple's trust policy.
      */
-    private fun containsCodeDirectory(bytes: ByteArray, offset: Int, size: Int): Boolean {
+    private fun containsCodeDirectory(bytes: ByteArray, offset: Int, size: Int, codeStart: Int, codeLength: Int): Boolean {
         if (offset < 0 || size < 12 || offset.toLong() + size > bytes.size) return false
         if (readU32(bytes, offset, false)?.toLong()?.and(0xffffffffL) != CSMAGIC_EMBEDDED_SIGNATURE) return false
         val blobLength = readU32(bytes, offset + 4, false)?.toLong()?.and(0xffffffffL) ?: return false
@@ -170,7 +170,7 @@ internal object MachOInspector {
                 if (expectedSlots != codeSlots) return false
                 if (hashOffset > cdLength || codeSlots * hashSize > cdLength - hashOffset) return false
                 if (specialSlots * hashSize > hashOffset) return false
-                if (codeLimit > bytes.size.toLong()) return false
+                if (codeLimit > codeLength.toLong() || codeStart < 0 || codeStart.toLong() + codeLength > bytes.size) return false
 
                 val algorithm = when (hashType) {
                     1 -> "SHA-1"
@@ -188,7 +188,7 @@ internal object MachOInspector {
                 repeat(codeSlots.toInt()) { slot ->
                     val pageLength = minOf(pageBytes, codeLimit - pageOffset).toInt()
                     val digest = MessageDigest.getInstance(algorithm)
-                        .digest(bytes.copyOfRange(pageOffset.toInt(), pageOffset.toInt() + pageLength))
+                        .digest(bytes.copyOfRange(codeStart + pageOffset.toInt(), codeStart + pageOffset.toInt() + pageLength))
                     val expectedAt = hashStart + slot * hashSize
                     for (i in 0 until hashSize) {
                         if (bytes[expectedAt + i] != digest[i]) return false
