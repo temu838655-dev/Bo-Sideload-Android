@@ -29,7 +29,7 @@ internal object IpaArchiveValidator {
                         return Result(false, "Tệp có quá nhiều mục ZIP; đã dừng để bảo vệ thiết bị.")
                     }
 
-                    val path = entry.name.replace('\\\\', '/')
+                    val path = entry.name.replace('\\', '/')
                     val segments = path.split('/')
                     if (path.startsWith('/') || segments.any { it == ".." } ||
                         Regex("^[A-Za-z]:").containsMatchIn(path)
@@ -69,5 +69,5 @@ internal object IpaArchiveValidator {
         }
     }
 
-    private val INFO_PLIST_PATTERN = Regex("^Payload/[^/]+\\\\.app/Info\\\\.plist$")
+    private val INFO_PLIST_PATTERN = Regex("^Payload/[^/]+\\.app/Info\\.plist$")
 }
