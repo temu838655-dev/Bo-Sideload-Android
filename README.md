@@ -71,3 +71,8 @@ With a free Apple Account used as an Xcode Personal Team, Apple's current accoun
 ### Provisioning profile inspection scope
 
 Profile inspection is metadata extraction, **not cryptographic validation**. The app does not currently verify the CMS signature against Apple's trust chain, check certificate revocation, inspect the private key in a P12, prove that a target device is eligible, or guarantee that the profile can install an app. Platform and bundle identifiers are read from the supplied profile content and must be treated as untrusted until independently validated.
+
+
+### Public Apple certificate inspection
+
+The Apple Signing Center can also read public X.509 .cer and PEM certificates and show Subject, Issuer, serial number, validity dates, and SHA-256 fingerprint. It does not import or inspect .p12 private-key containers in this screen, request passwords, verify Apple's trust chain/revocation status, or prove that a certificate matches a profile's embedded private key.
