@@ -70,6 +70,13 @@ class MainActivity : Activity() {
             setOnClickListener { chooseIpa() }
         }
         page.addView(importButton, fullWidth())
+        page.addView(Button(this).apply {
+            text = "Mở không gian mã nguồn Swift"
+            isAllCaps = false
+            setOnClickListener {
+                startActivity(Intent(this@MainActivity, SwiftWorkspaceActivity::class.java))
+            }
+        }, fullWidth())
 
         page.addView(label("KÝ IPA NGAY TRÊN ANDROID", 18f, Color.WHITE, true).apply {
             setPadding(0, dp(24), 0, dp(10))
