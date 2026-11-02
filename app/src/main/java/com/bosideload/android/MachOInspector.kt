@@ -219,13 +219,20 @@ internal object MachOInspector {
                             entitlementsLength = blobSize.toInt()
                         }
                     }
-                    if (entitlementsOffset < 0 || entitlementsLength < 0) return false
                     val entitlementHashAt = cd + hashOffset.toInt() - CSSLOT_ENTITLEMENTS * hashSize
-                    val entitlementDigestEngine = MessageDigest.getInstance(algorithm)
-                    entitlementDigestEngine.update(bytes, entitlementsOffset, entitlementsLength)
-                    val entitlementDigest = entitlementDigestEngine.digest()
-                    for (i in 0 until hashSize) {
-                        if (bytes[entitlementHashAt + i] != entitlementDigest[i]) return false
+                    if (entitlementsOffset >= 0 && entitlementsLength >= 0) {
+                        val entitlementDigestEngine = MessageDigest.getInstance(algorithm)
+                        entitlementDigestEngine.update(bytes, entitlementsOffset, entitlementsLength)
+                        val entitlementDigest = entitlementDigestEngine.digest()
+                        for (i in 0 until hashSize) {
+                            if (bytes[entitlementHashAt + i] != entitlementDigest[i]) return false
+                        }
+                    } else {
+                        // A missing optional entitlement blob must have an all-zero
+                        // special-slot digest; otherwise the seal references absent data.
+                        for (i in 0 until hashSize) {
+                            if (bytes[entitlementHashAt + i].toInt() != 0) return false
+                        }
                     }
                 }
 
