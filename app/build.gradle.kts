@@ -26,5 +26,7 @@ android {
 
 dependencies {
     implementation("com.googlecode.plist:dd-plist:1.30")
+    implementation("org.bouncycastle:bcprov-jdk18on:1.78.1")
+    implementation("org.bouncycastle:bcpkix-jdk18on:1.78.1")
     testImplementation("junit:junit:4.13.2")
 }
