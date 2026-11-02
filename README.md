@@ -12,12 +12,14 @@ Dự án này chỉ phát triển ứng dụng Android. Không xây dựng ứng
 - Hiển thị tên và dung lượng tệp.
 - Đọc cấu trúc ZIP của IPA.
 - Tìm `Payload/<ứng dụng>.app/Info.plist`.
+- Đọc metadata cơ bản từ plist XML và binary: tên ứng dụng, Bundle ID, phiên bản, mã bản dựng (nếu đọc được).
+- Giới hạn dữ liệu plist được phân tích ở 1 MB.
 - Từ chối đường dẫn ZIP không an toàn.
 - Giới hạn số lượng mục và tổng dữ liệu giải nén để giảm nguy cơ tệp ZIP độc hại.
 
 ## Giới hạn hiện tại
 
-- Chưa xác minh chữ ký IPA, chứng chỉ hoặc khả năng cài đặt.
+- Chỉ đọc metadata; không xác minh chữ ký IPA, chứng chỉ hoặc khả năng cài đặt.
 - Chưa ký IPA.
 - Chưa cài IPA lên iPhone.
 - Chưa có kết nối/chuyển tệp sang iPhone.
