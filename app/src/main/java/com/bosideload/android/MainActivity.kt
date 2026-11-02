@@ -159,19 +159,20 @@ class MainActivity : Activity() {
             }, fullWidth())
             val actions = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.END
+                gravity = Gravity.CENTER
             }
             actions.addView(Button(this).apply {
                 text = "Kiểm tra"
                 isAllCaps = false
                 setOnClickListener { inspect(Uri.parse(file.uri), false) }
-            })
+            }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginEnd = dp(4) })
             actions.addView(Button(this).apply {
                 text = "Chia sẻ"
                 isAllCaps = false
                 setOnClickListener { share(file) }
-            })
-            actions.addView(Button(this).apply {
+            }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginStart = dp(4) })
+            card.addView(actions, fullWidth())
+            card.addView(Button(this).apply {
                 text = "Bỏ khỏi danh sách"
                 isAllCaps = false
                 setOnClickListener {
@@ -179,8 +180,7 @@ class MainActivity : Activity() {
                     renderRecent()
                     Toast.makeText(this@MainActivity, "Đã bỏ khỏi danh sách gần đây", Toast.LENGTH_SHORT).show()
                 }
-            })
-            card.addView(actions, fullWidth())
+            }, fullWidth())
             recentPanel.addView(card, fullWidth().apply { bottomMargin = dp(10) })
         }
     }
