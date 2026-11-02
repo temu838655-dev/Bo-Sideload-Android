@@ -77,7 +77,8 @@ internal object AppleProvisioningProfileReader {
             provisionsAllDevices = (root.objectForKey("ProvisionsAllDevices")?.toString() == "true"),
             creationDate = date(root, "CreationDate"),
             expirationDate = date(root, "ExpirationDate"),
-            developerCertificateCount = (root.objectForKey("DeveloperCertificates") as? NSArray)?.array?.size ?: 0
+            developerCertificateCount = (root.objectForKey("DeveloperCertificates") as? NSArray)?.array?.size ?: 0,
+            developerCertificateSha256 = developerCertificateHashes(root)
         )
     }
 
