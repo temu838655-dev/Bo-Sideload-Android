@@ -7,6 +7,7 @@ Bo Sideload is an **Android-only APK**. The app processes existing IPA packages 
 ## Implemented foundation
 
 - Native Android file picker and recent IPA list.
+- Lightweight Swift/plist/entitlements source text editor with bounded file reads and export (not a compiler or full IDE).
 - ZIP safety validation and Info.plist metadata extraction.
 - Detection of common signing-related files.
 - Upstream zsign v1.1.2 Android CLI packaged for arm64-v8a and armeabi-v7a.
@@ -25,9 +26,10 @@ Temporary copies of the P12 and profile are deleted after the signing attempt. T
 1. Add a real-device smoke test for the native zsign executable on arm64 and armv7 Android hardware.
 2. Add certificate/profile inspection UI and preflight checks before signing.
 3. Add optional Bundle ID/name editing with a warning that profile authorization must match.
-4. Add signing progress/cancellation and stronger temporary-file cleanup.
-5. Investigate an Android-compatible iPhone pairing/USB-mux/Installation Proxy stack. Direct iPhone installation is not implemented.
-6. A native Swift source editor/project manager can be added, but compiling a full iOS app requires Apple's iOS SDK and signing environment; this Android APK cannot provide Xcode's complete build pipeline.
+4. Add a project tree, tabbed source editing and syntax highlighting; keep clear that compilation needs Apple's iOS SDK.
+5. Add signing progress/cancellation and stronger temporary-file cleanup.
+6. Investigate an Android-compatible iPhone pairing/USB-mux/Installation Proxy stack. Direct iPhone installation is not implemented.
+7. A native Swift source editor/project manager can be added, but compiling a full iOS app requires Apple's iOS SDK and signing environment; this Android APK cannot provide Xcode's complete build pipeline.
 
 ## Acceptance criteria
 
