@@ -125,7 +125,7 @@ class MainActivity : Activity() {
                         if (entryCount > MAX_ENTRIES) {
                             return ValidationResult(false, "Tệp có quá nhiều mục ZIP; đã dừng để bảo vệ thiết bị.")
                         }
-                        val path = entry.name.replace('\\\\', '/')
+                        val path = entry.name.replace('\\', '/')
                         if (path.startsWith('/') || path.split('/').any { it == ".." }) {
                             return ValidationResult(false, "Tệp chứa đường dẫn ZIP không an toàn.")
                         }
@@ -192,6 +192,6 @@ class MainActivity : Activity() {
         private const val PICK_IPA = 100
         private const val MAX_ENTRIES = 100_000
         private const val MAX_UNCOMPRESSED_BYTES = 512L * 1024L * 1024L
-        private val INFO_PLIST_PATTERN = Regex("^Payload/[^/]+\\\\.app/Info\\\\.plist$")
+        private val INFO_PLIST_PATTERN = Regex("^Payload/[^/]+\\.app/Info\\.plist$")
     }
 }
