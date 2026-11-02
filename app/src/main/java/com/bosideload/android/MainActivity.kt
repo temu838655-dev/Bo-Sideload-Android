@@ -129,7 +129,7 @@ class MainActivity : Activity() {
                         info.shortVersion?.let { append("\nPhiên bản: ").append(it) }
                         info.buildVersion?.let { append("\nMã bản dựng: ").append(it) }
                     } else if (result.valid) {
-                        append("\n\nChưa đọc được metadata: Info.plist có thể dùng định dạng nhị phân hoặc XML không hỗ trợ.")
+                        append("\n\nKhông đọc được metadata. Info.plist có thể bị lỗi hoặc dùng định dạng không được hỗ trợ.")
                     }
                     append("\n\nKhông phải kết quả xác minh chữ ký hoặc khả năng cài đặt.")
                 }
