@@ -6,6 +6,14 @@ import org.junit.Test
 
 class AppleSigningCompatibilityTest {
     @Test
+    fun recognizesOnlyTheMainApplicationInfoPlistPath() {
+        assertTrue(AppleSigningCompatibility.isAppInfoPlistPath("Payload/Example.app/Info.plist"))
+        assertFalse(AppleSigningCompatibility.isAppInfoPlistPath("Payload/Example.app/PlugIns/Widget.appex/Info.plist"))
+        assertFalse(AppleSigningCompatibility.isAppInfoPlistPath("Payload/Example.app/InfoXplist"))
+        assertFalse(AppleSigningCompatibility.isAppInfoPlistPath("../Payload/Example.app/Info.plist"))
+    }
+
+    @Test
     fun matchesExactBundleIdentifier() {
         assertTrue(AppleSigningCompatibility.matchesApplicationIdentifier(
             "ABCDE12345.com.example.app", "com.example.app"
