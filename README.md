@@ -58,7 +58,7 @@ The Android app includes a USB Host diagnostics screen. It lists attached USB de
 
 ## Apple platform signing guidance (free Apple ID)
 
-The app now includes an Apple Signing Center explaining the Personal Team workflow and platform boundaries for iPhone/iPad, macOS, and tvOS. It can accept a profile or public certificate file for basic filename/size intake only; this first version does not decode CMS profiles, validate certificate chains, extract Team ID/Bundle ID/expiry, or store private keys.
+The app now includes an Apple Signing Center explaining the Personal Team workflow and platform boundaries for iPhone/iPad, macOS, and tvOS. It can parse the CMS-wrapped plist payload of a provisioning profile and display its name, UUID, Team ID, application identifier, platform, registered-device count, creation/expiry dates, and embedded developer-certificate count. It accepts `.mobileprovision`, `.provisionprofile`, and raw plist files up to 10 MB.
 
 With a free Apple Account used as an Xcode Personal Team, Apple's current account guidance lists limits of 10 App IDs and 3 registered devices, both expiring after 7 days, and up to 3 installed apps per device. Re-provisioning is required after expiry. This is a personal development/testing workflow, not App Store or enterprise distribution. See [Apple's developer account overview](https://developer.apple.com/help/account/basics/about-your-developer-account/).
 
@@ -66,3 +66,8 @@ With a free Apple Account used as an Xcode Personal Team, Apple's current accoun
 - macOS: the app does not provide Developer ID signing or notarization; these require the appropriate Apple program capabilities and macOS tooling.
 - tvOS: requires a tvOS target, compatible provisioning profile, and Xcode signing. A generic iOS profile is not interchangeable.
 - Bo Sideload Android does not authenticate to Apple, create Apple-issued credentials, compile Xcode projects, or install to Apple devices directly.
+
+
+### Provisioning profile inspection scope
+
+Profile inspection is metadata extraction, **not cryptographic validation**. The app does not currently verify the CMS signature against Apple's trust chain, check certificate revocation, inspect the private key in a P12, prove that a target device is eligible, or guarantee that the profile can install an app. Platform and bundle identifiers are read from the supplied profile content and must be treated as untrusted until independently validated.
