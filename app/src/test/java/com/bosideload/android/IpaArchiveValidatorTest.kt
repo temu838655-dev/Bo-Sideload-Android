@@ -23,6 +23,22 @@ class IpaArchiveValidatorTest {
     }
 
     @Test
+    fun doesNotAcceptDirectoryNamedInfoPlist() {
+        val result = IpaArchiveValidator.validate(
+            zipOf("Payload/Demo.app/Info.plist/" to "")
+        )
+        assertFalse(result.valid)
+        assertTrue(result.message.contains("Không tìm thấy"))
+    }
+
+    @Test
+    fun rejectsBackslashPathTraversal() {
+        val result = IpaArchiveValidator.validate(zipOf("Payload\\..\\outside.txt" to "x"))
+        assertFalse(result.valid)
+        assertTrue(result.message.contains("không an toàn"))
+    }
+
+    @Test
     fun rejectsMultipleAppInfoPlists() {
         val result = IpaArchiveValidator.validate(
             zipOf(
