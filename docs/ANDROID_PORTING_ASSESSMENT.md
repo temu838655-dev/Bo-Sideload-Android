@@ -1,35 +1,34 @@
-# Android porting assessment
+# Android implementation assessment
 
-## Current app status
+## Product decision
 
-The Android app currently provides a native file picker and displays selected-file metadata. It does not yet sign an IPA, authenticate with Apple, pair with an iPhone, or install an app.
+Bo Sideload is an **Android-only APK**. The app processes existing IPA packages on the Android device. It does not attempt to embed Apple's proprietary Xcode or iOS SDK.
 
-## Upstream library review
+## Implemented foundation
 
-The upstream project is [nab138/isideload](https://github.com/nab138/isideload), an MIT-licensed Rust library. Its README requires calling `isideload::init()`. The crate exposes authentication, developer-account, sideload, and device communication modules.
+- Native Android file picker and recent IPA list.
+- ZIP safety validation and Info.plist metadata extraction.
+- Detection of common signing-related files.
+- Upstream zsign v1.1.2 Android CLI packaged for arm64-v8a and armeabi-v7a.
+- GitHub Actions downloads the two upstream release archives and checks their SHA-256 digests before APK packaging.
+- Kotlin adapter copies the selected IPA, P12 and mobileprovision into app-private temporary storage, invokes zsign without a shell, enforces a ten-minute process timeout, and exports the signed IPA through Android's document picker.
+- P12 password is requested for each signing run and is not written to app preferences or history.
 
-The upstream install implementation explicitly installs an **already signed app bundle directory** through AFC and Installation Proxy. It is not a simple API that accepts an arbitrary IPA byte stream and installs it unchanged.
+## Signing rules and security
 
-## Android integration blockers
+A P12 identity and provisioning profile must be valid and mutually compatible with the app's Bundle ID, entitlements, device authorization and certificate. The app does not generate Apple credentials, bypass Apple's validation, or guarantee that the signed IPA will launch.
 
-1. **Rust-to-Kotlin bridge:** build a small JNI layer (or another maintained Rust/Kotlin bridge) with a stable, narrow API. Do not expose Rust internal types directly to the UI.
-2. **Android targets:** cross-compile and test the Rust dependency graph for supported Android ABIs using the Android NDK. The upstream crate has native dependencies and platform-specific storage features; a successful desktop build does not prove Android compatibility.
-3. **Persistent secrets:** do not use the upstream desktop keyring backend on Android without validating its support. Implement an Android Keystore-backed storage adapter for refresh/session material, and never log passwords or tokens.
-4. **Device pairing and transport:** implement and test the supported Apple device pairing path on Android. USB host support and Wi-Fi pairing have different permission and transport requirements.
-5. **Background work and cancellation:** expose progress, cancellation, and useful error messages to Kotlin without blocking the main thread.
-6. **IPA processing:** inspect the archive safely, extract the app bundle into private app storage, preserve required metadata, and validate the resulting bundle before signing.
+Temporary copies of the P12 and profile are deleted after the signing attempt. The signing password is held only for the current operation. Do not log it or persist it.
 
-## Safe implementation sequence
+## Remaining work
 
-- [x] Establish Android project and CI APK build.
-- [x] Select a file and display its name and size.
-- [ ] Validate IPA ZIP structure and report clear errors.
-- [ ] Add private-storage extraction with size and path-traversal limits.
-- [ ] Add Rust Android build matrix and a minimal JNI smoke test.
-- [ ] Add secure Android storage and Apple authentication UI.
-- [ ] Add pairing/device discovery and test on real iPhones.
-- [ ] Add signing, provisioning, installation, and end-to-end tests.
+1. Add a real-device smoke test for the native zsign executable on arm64 and armv7 Android hardware.
+2. Add certificate/profile inspection UI and preflight checks before signing.
+3. Add optional Bundle ID/name editing with a warning that profile authorization must match.
+4. Add signing progress/cancellation and stronger temporary-file cleanup.
+5. Investigate an Android-compatible iPhone pairing/USB-mux/Installation Proxy stack. Direct iPhone installation is not implemented.
+6. A native Swift source editor/project manager can be added, but compiling a full iOS app requires Apple's iOS SDK and signing environment; this Android APK cannot provide Xcode's complete build pipeline.
 
 ## Acceptance criteria
 
-Do not label the app as a working sideloader until a real-device test demonstrates: Apple authentication, valid signing/provisioning, device pairing, successful installation, and launching the installed app. Test failures must be shown clearly and must not silently claim success.
+Do not call this a full Xcode replacement or complete iPhone sideloader until an Android device test proves the signing engine runs, a valid P12/profile pair produces an output accepted by iOS, and a separately implemented device transport successfully installs and launches it on a real iPhone.
