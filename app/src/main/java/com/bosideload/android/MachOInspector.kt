@@ -14,19 +14,19 @@ internal object MachOInspector {
         val hasCodeDirectory: Boolean = false
     )
 
-    fun inspect(bytes: ByteArray, resourceSealBytes: ByteArray? = null): Result {
+    fun inspect(bytes: ByteArray, resourceSealBytes: ByteArray? = null, infoPlistBytes: ByteArray? = null): Result {
         if (bytes.size < 4) return Result(false, false, "Executable too small.")
         val magic = u32be(bytes, 0).toLong() and 0xffffffffL
         return when (magic) {
             0xFEEDFACE, 0xFEEDFACF, 0xCEFAEDFE, 0xCFFAEDFE ->
-                inspectThin(bytes, 0, bytes.size, resourceSealBytes)
+                inspectThin(bytes, 0, bytes.size, resourceSealBytes, infoPlistBytes)
             0xCAFEBABE, 0xCAFEBABF, 0xBEBAFECA, 0xBFBAFECA ->
-                inspectFat(bytes, resourceSealBytes)
+                inspectFat(bytes, resourceSealBytes, infoPlistBytes)
             else -> Result(false, false, "Unknown Mach-O magic.")
         }
     }
 
-    private fun inspectFat(bytes: ByteArray, resourceSealBytes: ByteArray?): Result {
+    private fun inspectFat(bytes: ByteArray, resourceSealBytes: ByteArray?, infoPlistBytes: ByteArray?): Result {
         if (bytes.size < 8) return Result(false, false, "Truncated fat header.")
         val magic = u32be(bytes, 0).toLong() and 0xffffffffL
         val is64 = magic == 0xCAFEBABF || magic == 0xBFBAFECA
@@ -56,7 +56,7 @@ internal object MachOInspector {
                 offset + size > bytes.size.toLong()) {
                 return Result(false, false, "Mach-O slice is out of bounds.")
             }
-            val slice = inspectThin(bytes, offset.toInt(), size.toInt(), resourceSealBytes)
+            val slice = inspectThin(bytes, offset.toInt(), size.toInt(), resourceSealBytes, infoPlistBytes)
             if (!slice.isMachO) return slice
             if (slice.hasCodeSignatureCommand) {
                 foundSignature = true
@@ -73,7 +73,7 @@ internal object MachOInspector {
         )
     }
 
-    private fun inspectThin(bytes: ByteArray, start: Int, length: Int, resourceSealBytes: ByteArray?): Result {
+    private fun inspectThin(bytes: ByteArray, start: Int, length: Int, resourceSealBytes: ByteArray?, infoPlistBytes: ByteArray?): Result {
         if (length < 28 || start < 0 || start.toLong() + length > bytes.size) {
             return Result(false, false, "Truncated Mach-O header.")
         }
@@ -112,7 +112,7 @@ internal object MachOInspector {
                     return Result(false, false, "Code signature data is out of bounds.")
                 }
                 val directoryValid = containsCodeDirectory(
-                    bytes, start + dataoff, datasize, start, length, resourceSealBytes
+                    bytes, start + dataoff, datasize, start, length, resourceSealBytes, infoPlistBytes
                 )
                 hasCodeDirectory = if (hasCodeSignature) hasCodeDirectory && directoryValid else directoryValid
                 hasCodeSignature = true
@@ -133,7 +133,7 @@ internal object MachOInspector {
      * This is not CMS/certificate-chain verification and does not validate alternate
      * CodeDirectories, resource seals, or Apple's trust policy.
      */
-    private fun containsCodeDirectory(bytes: ByteArray, offset: Int, size: Int, codeStart: Int, codeLength: Int, resourceSealBytes: ByteArray?): Boolean {
+    private fun containsCodeDirectory(bytes: ByteArray, offset: Int, size: Int, codeStart: Int, codeLength: Int, resourceSealBytes: ByteArray?, infoPlistBytes: ByteArray?): Boolean {
         if (offset < 0 || size < 12 || offset.toLong() + size > bytes.size) return false
         if (readU32(bytes, offset, false)?.toLong()?.and(0xffffffffL) != CSMAGIC_EMBEDDED_SIGNATURE) return false
         val blobLength = readU32(bytes, offset + 4, false)?.toLong()?.and(0xffffffffL) ?: return false
@@ -185,6 +185,17 @@ internal object MachOInspector {
                 if (hashSize > digestLength || (hashType == 1 && hashSize > 20) ||
                     (hashType == 2 && hashSize != 32) || (hashType == 3 && hashSize > 32) ||
                     (hashType == 4 && hashSize > 48)) return false
+
+                // CSSLOT_INFOSLOT is special slot 1. Verify the raw main Info.plist
+                // bytes when supplied by the IPA verifier.
+                if (infoPlistBytes != null) {
+                    if (specialSlots < CSSLOT_INFOSLOT || hashOffset < CSSLOT_INFOSLOT * hashSize) return false
+                    val infoHashAt = cd + hashOffset.toInt() - CSSLOT_INFOSLOT * hashSize
+                    val infoDigest = MessageDigest.getInstance(algorithm).digest(infoPlistBytes)
+                    for (i in 0 until hashSize) {
+                        if (bytes[infoHashAt + i] != infoDigest[i]) return false
+                    }
+                }
 
                 // CSSLOT_RESOURCEDIR is special slot 3. When the caller supplies
                 // the bundle's CodeResources bytes, require the CodeDirectory's
@@ -255,5 +266,6 @@ internal object MachOInspector {
     private const val CSMAGIC_EMBEDDED_SIGNATURE = 0xfade0cc0L
     private const val CSMAGIC_CODEDIRECTORY = 0xfade0c02L
     private const val CSSLOT_CODEDIRECTORY = 0L
+    private const val CSSLOT_INFOSLOT = 1
     private const val CSSLOT_RESOURCEDIR = 3
 }
