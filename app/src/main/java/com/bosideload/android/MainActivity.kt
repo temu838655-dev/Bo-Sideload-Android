@@ -206,8 +206,26 @@ class MainActivity : Activity() {
                 val p12 = copyUriToFile(certificateUri, File(workDir, "certificate.p12"), MAX_CREDENTIAL_BYTES)
                 val profile = copyUriToFile(provisioningUri, File(workDir, "profile.mobileprovision"), MAX_CREDENTIAL_BYTES)
                 val output = File(cacheDir, "BoSideload-${System.currentTimeMillis()}-signed.ipa")
-                result = ZsignEngine(this).sign(input, p12, profile, password, output)
-                if (result.success) signedFile = result.output
+                val preflight = AppleSigningCompatibility.preflight(input, p12, profile, password)
+                if (!preflight.compatible) {
+                    result = ZsignEngine.SignResult(
+                        false,
+                        null,
+                        buildString {
+                            appendLine("ĐÃ DỪNG TRƯỚC KHI KÝ — dữ liệu chưa tương thích:")
+                            preflight.errors.forEach { appendLine("• $it") }
+                            preflight.warnings.forEach { appendLine("Cảnh báo: $it") }
+                            append("Hãy chọn đúng IPA, P12 và provisioning profile.")
+                        }
+                    )
+                } else {
+                    result = ZsignEngine(this).sign(input, p12, profile, password, output)
+                    if (result.success) signedFile = result.output
+                    if (preflight.warnings.isNotEmpty()) {
+                        result = result.copy(message = result.message + "\\n\\nKIỂM TRA TRƯỚC KHI KÝ\\n" +
+                            preflight.warnings.joinToString("\\n") { "• $it" })
+                    }
+                }
                 p12.delete()
                 profile.delete()
                 input.delete()
