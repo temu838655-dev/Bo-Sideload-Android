@@ -62,19 +62,19 @@ internal object IpaArchiveValidator {
                             return Result(false, "Tệp chứa nhiều Info.plist ở cấp ứng dụng; không thể xác định gói IPA chính.")
                         }
                     }
-                    if (!entry.isDirectory && path.endsWith("/_CodeSignature/CodeResources")) {
-                        hasCodeResources = true
-                    }
-                    if (!entry.isDirectory && path.matches(Regex("^Payload/[^/]+\\.app/embedded\\.mobileprovision$"))) {
-                        hasProvisioningProfile = true
-                    }
+                    val isCodeResources = !entry.isDirectory &&
+                        path.matches(Regex("^Payload/[^/]+\\.app/_CodeSignature/CodeResources$"))
+                    val isProvisioningProfile = !entry.isDirectory &&
+                        path.matches(Regex("^Payload/[^/]+\\.app/embedded\\.mobileprovision$"))
 
                     val plistBytes = if (isInfoPlist) ByteArrayOutputStream() else null
                     var plistTooLarge = false
+                    var signingFileBytes = 0L
                     if (!entry.isDirectory) {
                         while (true) {
                             val read = zip.read(buffer)
                             if (read < 0) break
+                            if (isCodeResources || isProvisioningProfile) signingFileBytes += read
                             totalBytes += read
                             if (totalBytes > maxUncompressedBytes) {
                                 return Result(false, "Dữ liệu giải nén vượt giới hạn an toàn.")
@@ -88,6 +88,8 @@ internal object IpaArchiveValidator {
                             }
                         }
                     }
+                    if (isCodeResources && signingFileBytes > 0L) hasCodeResources = true
+                    if (isProvisioningProfile && signingFileBytes > 0L) hasProvisioningProfile = true
                     if (plistBytes != null && !plistTooLarge) {
                         metadata = IpaPlistReader.read(plistBytes.toByteArray())
                     }
