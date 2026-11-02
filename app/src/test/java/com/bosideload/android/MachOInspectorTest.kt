@@ -111,7 +111,7 @@ class MachOInspectorTest {
     fun rejectsEntitlementsSpecialSlotHashMismatch() {
         val signedEntitlements = entitlementBlob()
         val bytes = thinMachOWithEntitlements(signedEntitlements)
-        val blobOffset = 48 + 20 + 173
+        val blobOffset = 48 + 12 + 16 + 205
         bytes[blobOffset + 8] = (bytes[blobOffset + 8].toInt() xor 0x01).toByte()
         val result = MachOInspector.inspect(bytes)
         assertTrue(result.isMachO)
