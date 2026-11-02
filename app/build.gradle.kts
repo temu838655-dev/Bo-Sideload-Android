@@ -25,5 +25,6 @@ android {
 }
 
 dependencies {
+    implementation("com.googlecode.plist:dd-plist:1.30")
     testImplementation("junit:junit:4.13.2")
 }
