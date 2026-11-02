@@ -33,8 +33,10 @@ jobs:
           echo "d4fca4c5aff6069054873ab11622af3d009aa5b1e9cc19a0f10e24ace6f14b81  /tmp/zsign-armv7.tar.gz" | sha256sum -c -
           tar -xzf /tmp/zsign-armv7.tar.gz -C app/src/main/assets/zsign/armeabi-v7a
           chmod 755 app/src/main/assets/zsign/arm64-v8a/zsign app/src/main/assets/zsign/armeabi-v7a/zsign
-          app/src/main/assets/zsign/arm64-v8a/zsign -v
-          app/src/main/assets/zsign/armeabi-v7a/zsign -v
+          file app/src/main/assets/zsign/arm64-v8a/zsign
+          file app/src/main/assets/zsign/armeabi-v7a/zsign
+          file app/src/main/assets/zsign/arm64-v8a/zsign | grep -q 'ARM aarch64'
+          file app/src/main/assets/zsign/armeabi-v7a/zsign | grep -q 'ARM'
       - name: Build debug APK
         run: gradle testDebugUnitTest assembleDebug
       - name: Upload APK artifact
