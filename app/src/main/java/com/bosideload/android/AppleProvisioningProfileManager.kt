@@ -35,6 +35,73 @@ internal object AppleProvisioningProfileManager {
         val profileContent: ByteArray? = null
     )
 
+    data class DeviceRegistrationResult(
+        val ok: Boolean,
+        val message: String,
+        val deviceResourceId: String? = null
+    )
+
+    /** Registers a verified iPhone UDID with the Apple Developer team. */
+    fun registerDevice(
+        credentials: AppleConnectCredentialVault.Credentials,
+        name: String,
+        udid: String
+    ): DeviceRegistrationResult {
+        require(name.isNotBlank() && name.length <= 50) {
+            "Tên thiết bị phải có từ 1 đến 50 ký tự."
+        }
+        val normalizedUdid = udid.trim().uppercase()
+        require(normalizedUdid.matches(Regex("[0-9A-F]{40}"))) {
+            "UDID iPhone không hợp lệ. Cần UDID 40 ký tự hex lấy từ kết nối thiết bị đã xác minh."
+        }
+        val body = JSONObject().put("data", JSONObject()
+            .put("type", "devices")
+            .put("attributes", JSONObject()
+                .put("name", name.trim())
+                .put("platform", "IOS")
+                .put("udid", normalizedUdid)))
+            .toString().toByteArray(Charsets.UTF_8)
+        val connection = URL("https://api.appstoreconnect.apple.com/v1/devices")
+            .openConnection() as HttpsURLConnection
+        return try {
+            connection.requestMethod = "POST"
+            connection.connectTimeout = 15000
+            connection.readTimeout = 30000
+            connection.doOutput = true
+            connection.setRequestProperty("Authorization", "Bearer " + AppleConnectJwt.token(credentials))
+            connection.setRequestProperty("Accept", "application/json")
+            connection.setRequestProperty("Content-Type", "application/json")
+            connection.outputStream.use { it.write(body) }
+            val code = connection.responseCode
+            val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+            val response = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+            if (code != 201) {
+                val detail = runCatching {
+                    JSONObject(response).optJSONArray("errors")?.optJSONObject(0)
+                        ?.optString("detail").orEmpty()
+                }.getOrDefault("")
+                return DeviceRegistrationResult(false,
+                    "Apple không đăng ký được thiết bị (HTTP $code)." +
+                        if (detail.isNotBlank()) " $detail" else " " + response.take(300))
+            }
+            val data = JSONObject(response).getJSONObject("data")
+            val attrs = data.optJSONObject("attributes") ?: JSONObject()
+            val id = data.getString("id")
+            require(attrs.optString("udid").equals(normalizedUdid, true)) {
+                "Apple trả về UDID khác với thiết bị đã xác nhận; dừng sử dụng resource."
+            }
+            DeviceRegistrationResult(true,
+                "Đã đăng ký thiết bị iOS với Apple. Device resource ID: $id. Bạn có thể dùng ID này để tạo Development/Ad Hoc profile.",
+                id)
+        } catch (error: Exception) {
+            DeviceRegistrationResult(false,
+                "Không thể đăng ký thiết bị: " + (error.message ?: error.javaClass.simpleName))
+        } finally {
+            body.fill(0)
+            connection.disconnect()
+        }
+    }
+
     /** Read-only discovery so users can obtain the Apple resource IDs required by profile creation. */
     fun listResources(credentials: AppleConnectCredentialVault.Credentials): Result {
         val endpoints = listOf(
