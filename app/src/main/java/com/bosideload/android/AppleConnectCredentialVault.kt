@@ -49,6 +49,37 @@ internal class AppleConnectCredentialVault(context: Context) {
         } finally { clear.fill(0) }
     }
 
+    data class SigningMaterial(val privateKeyPkcs8Base64: String, val publicKeyX509Base64: String, val csrPem: String)
+
+    /** Stores local signing material encrypted with the same Android Keystore AES-GCM key. */
+    fun saveSigningMaterial(material: SigningMaterial) {
+        val clear = JSONObject()
+            .put("privateKey", material.privateKeyPkcs8Base64)
+            .put("publicKey", material.publicKeyX509Base64)
+            .put("csr", material.csrPem)
+            .toString().toByteArray(StandardCharsets.UTF_8)
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.ENCRYPT_MODE, key())
+        val encrypted = cipher.doFinal(clear)
+        prefs.edit()
+            .putString("signing_iv", Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
+            .putString("signing_data", Base64.encodeToString(encrypted, Base64.NO_WRAP))
+            .apply()
+        clear.fill(0)
+    }
+
+    fun loadSigningMaterial(): SigningMaterial? {
+        val iv = prefs.getString("signing_iv", null) ?: return null
+        val data = prefs.getString("signing_data", null) ?: return null
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, Base64.decode(iv, Base64.NO_WRAP)))
+        val clear = cipher.doFinal(Base64.decode(data, Base64.NO_WRAP))
+        return try {
+            val json = JSONObject(String(clear, StandardCharsets.UTF_8))
+            SigningMaterial(json.getString("privateKey"), json.getString("publicKey"), json.getString("csr"))
+        } finally { clear.fill(0) }
+    }
+
     fun clear() {
         prefs.edit().clear().apply()
         runCatching {
