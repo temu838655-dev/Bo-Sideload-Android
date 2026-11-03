@@ -88,6 +88,19 @@ internal class AfcClient(
         return UploadResult(remotePath, written)
     }
 
+    /** Removes only a Bo Sideload-owned IPA staging path. */
+    @Synchronized
+    @Throws(IOException::class)
+    fun removeStagedIpa(remotePath: String) {
+        checkOpen()
+        if (!STAGED_IPA_PATH.matches(remotePath)) {
+            throw IOException("Refusing to remove a path not owned by Bo Sideload")
+        }
+        val pathBytes = remotePath.toByteArray(StandardCharsets.UTF_8) + byteArrayOf(0)
+        val response = exchange(AFC_OP_REMOVE_PATH, pathBytes)
+        requireSuccessStatus(response, "RemovePath")
+    }
+
     private fun openForWrite(data: ByteArray): Long {
         val response = exchange(AFC_OP_FILE_OPEN, data)
         if (response.header.operation != AFC_OP_FILE_OPEN_RES || response.body.size != 8) {
