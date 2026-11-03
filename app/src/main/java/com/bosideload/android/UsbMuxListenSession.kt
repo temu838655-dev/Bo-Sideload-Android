@@ -35,7 +35,6 @@ internal class UsbMuxListenSession(
         return UsbMuxResponseParser.parse(transport.readPacket())
     }
 
-    @Synchronized
     override fun close() {
         if (closed) return
         closed = true
