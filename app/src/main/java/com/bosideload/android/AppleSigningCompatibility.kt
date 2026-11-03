@@ -128,7 +128,7 @@ internal object AppleSigningCompatibility {
         val warnings = mutableListOf<String>()
         if (metadata.bundleId.isNullOrBlank()) errors += "Ứng dụng chính không có CFBundleIdentifier."
         nestedBundles.filter { it.bundleId.isNullOrBlank() }.forEach {
-            errors += "Không đọc được Bundle ID của bundle lồng: ${'$'}{it.path}"
+            errors += "Không đọc được Bundle ID của bundle lồng: ${it.path}"
         }
         val profiles = profileFiles.map { AppleProvisioningProfileReader.read(it.readBytes()) }
         val resolution = resolveProfileAssignments(bundleIds, profiles)
@@ -144,10 +144,10 @@ internal object AppleSigningCompatibility {
             val bundleMetadata = metadata.copy(bundleId = assignment.bundleId)
             val result = check(bundleMetadata, profile, certificates, now, targetUdid)
             if (result.errors.isNotEmpty()) {
-                errors += result.errors.map { "${'$'}{assignment.bundleId}: ${'$'}it" }
+                errors += result.errors.map { "${assignment.bundleId}: ${'$'}it" }
             }
             if (result.warnings.isNotEmpty()) {
-                warnings += result.warnings.map { "${'$'}{assignment.bundleId}: ${'$'}it" }
+                warnings += result.warnings.map { "${assignment.bundleId}: ${'$'}it" }
             }
         }
         return Check(errors.isEmpty(), errors.distinct(), warnings.distinct())
@@ -178,7 +178,7 @@ internal object AppleSigningCompatibility {
         }
         val used = assignments.map { it.profileIndex }.toSet()
         profiles.indices.filter { it !in used }.forEach {
-            errors += "Provisioning profile thứ ${'$'}{it + 1} không được ghép với bundle nào trong IPA."
+            errors += "Provisioning profile thứ ${it + 1} không được ghép với bundle nào trong IPA."
         }
         return ProfileResolution(assignments, errors)
     }
