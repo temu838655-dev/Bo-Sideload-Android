@@ -2,6 +2,9 @@ package com.bosideload.android
 
 import org.w3c.dom.Element
 import org.xml.sax.InputSource
+import com.dd.plist.PropertyListParser
+import java.time.Instant
+import java.util.Date
 import java.io.ByteArrayInputStream
 import java.nio.charset.StandardCharsets
 import java.util.Base64
@@ -36,6 +39,12 @@ internal object LockdownPlistCodec {
     fun decode(bytes: ByteArray, maxBytes: Int = DEFAULT_MAX_BYTES): Map<String, Any?> {
         require(maxBytes > 0) { "invalid plist size limit" }
         require(bytes.isNotEmpty() && bytes.size <= maxBytes) { "invalid Lockdown plist size" }
+        if (bytes.size >= BINARY_PLIST_MAGIC.size && bytes.copyOfRange(0, BINARY_PLIST_MAGIC.size).contentEquals(BINARY_PLIST_MAGIC)) {
+            val parsed = PropertyListParser.parse(bytes).toJavaObject()
+            val normalized = normalizeBinaryValue(parsed, 0, intArrayOf(0))
+            @Suppress("UNCHECKED_CAST")
+            return normalized as? Map<String, Any?> ?: throw IllegalArgumentException("Lockdown plist root must be a dictionary")
+        }
         val factory = DocumentBuilderFactory.newInstance().apply {
             isNamespaceAware = false
             isXIncludeAware = false
@@ -93,6 +102,7 @@ internal object LockdownPlistCodec {
                 out.append("<real>").append(number.toString()).append("</real>")
             }
             is ByteArray -> out.append("<data>").append(Base64.getEncoder().encodeToString(value)).append("</data>")
+            is Date -> out.append("<date>").append(Instant.ofEpochMilli(value.time).toString()).append("</date>")
             null -> throw IllegalArgumentException("null is not a supported plist value")
             else -> throw IllegalArgumentException("unsupported plist value type: ${value.javaClass.name}")
         }
@@ -140,9 +150,34 @@ internal object LockdownPlistCodec {
             "true" -> true.also { require(element.textContent.isBlank()) }
             "false" -> false.also { require(element.textContent.isBlank()) }
             "data" -> Base64.getMimeDecoder().decode(element.textContent)
+            "date" -> Date.from(Instant.parse(element.textContent.trim()))
             else -> throw IllegalArgumentException("unsupported plist element: ${element.tagName}")
         }
     }
+
+    private fun normalizeBinaryValue(value: Any?, depth: Int, counter: IntArray): Any? {
+        require(depth <= MAX_DEPTH) { "plist nesting is too deep" }
+        counter[0]++
+        require(counter[0] <= MAX_NODES) { "plist contains too many values" }
+        return when (value) {
+            is Map<*, *> -> {
+                val result = linkedMapOf<String, Any?>()
+                value.forEach { (key, item) ->
+                    val name = key as? String ?: throw IllegalArgumentException("plist dictionary keys must be strings")
+                    require(!result.containsKey(name)) { "duplicate plist dictionary key" }
+                    result[name] = normalizeBinaryValue(item, depth + 1, counter)
+                }
+                result
+            }
+            is Array<*> -> value.map { normalizeBinaryValue(it, depth + 1, counter) }
+            is List<*> -> value.map { normalizeBinaryValue(it, depth + 1, counter) }
+            is String, is Boolean, is Byte, is Short, is Int, is Long, is Float, is Double, is ByteArray, is Date -> value
+            null -> throw IllegalArgumentException("null is not a supported plist value")
+            else -> throw IllegalArgumentException("unsupported binary plist value type: " + value.javaClass.name)
+        }
+    }
+
+    private val BINARY_PLIST_MAGIC = "bplist00".toByteArray(StandardCharsets.US_ASCII)
 
     private fun Element.childElements(): List<Element> {
         val result = ArrayList<Element>()
