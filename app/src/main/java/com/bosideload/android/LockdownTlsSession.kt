@@ -28,11 +28,15 @@ import java.nio.charset.StandardCharsets
  * The server certificate is pinned to the DeviceCertificate from the accepted
  * PairRecord. No permissive trust-all manager or pairing bypass is used.
  */
+internal interface LockdownServiceSession : Closeable {
+    val channel: LockdownSessionChannel
+}
+
 internal class LockdownTlsSession private constructor(
     val sessionId: String,
     private val sslSocket: SSLSocket,
-    val channel: LockdownSessionChannel
-) : Closeable {
+    override val channel: LockdownSessionChannel
+) : LockdownServiceSession {
     override fun close() {
         runCatching { channel.close() }
         runCatching { sslSocket.close() }
