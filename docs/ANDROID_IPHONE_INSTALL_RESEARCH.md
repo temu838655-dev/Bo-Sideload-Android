@@ -83,3 +83,8 @@ This is protocol serialization only. It does not generate host certificates/priv
 `LockdownSessionChannel` now provides a synchronous request/response exchange over an already-open byte stream. It validates that outgoing payloads are plist dictionaries containing a Request name, applies the bounded 4-byte big-endian framing, parses the reply, preserves explicit Lockdown failures, and rejects a reply whose Request name conflicts with the outstanding request. Unit tests cover successful exchange, explicit service errors, mismatched replies, malformed requests, and use after close.
 
 This channel is not yet connected to the Android USBMux transport and does not create the Lockdown service socket. It must only be used after the service connection and normal Apple trust/pairing workflow are implemented. It does not enable StartSession, TLS, Installation Proxy, or IPA installation by itself.
+
+
+### Binary plist and date support
+
+The Lockdown plist decoder now detects Apple's `bplist00` signature and uses the already bundled dd-plist parser for binary input. Parsed Java values are normalized into dictionaries/lists and supported scalar types, including byte arrays and dates, with depth and node-count checks. XML date values are also decoded and encoded. A fixed binary fixture and date round-trip tests were added. This improves compatibility with Lockdown replies that use binary plist or date fields, but does not change the trust or installation status: no physical device exchange, Pair flow, TLS session, or IPA installation has been validated.
