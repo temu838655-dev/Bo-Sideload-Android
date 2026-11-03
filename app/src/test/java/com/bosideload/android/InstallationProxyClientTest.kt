@@ -69,4 +69,31 @@ class InstallationProxyClientTest {
         }
         assertEquals(true, error.message!!.contains("signature invalid"))
     }
+    @Test
+    fun installRejectsStatusResponseWithoutStatusOrError() {
+        val response = LockdownPlistCodec.encode(mapOf("PercentComplete" to 50L))
+        val client = InstallationProxyClient(
+            ByteArrayInputStream(PropertyListServiceCodec.encode(response)),
+            ByteArrayOutputStream()
+        )
+
+        val error = assertThrows(IOException::class.java) {
+            client.install("/PublicStaging/test.ipa")
+        }
+        assertEquals(true, error.message!!.contains("without Status or Error"))
+    }
+
+    @Test
+    fun installRejectsEmptyStatusResponse() {
+        val response = LockdownPlistCodec.encode(emptyMap<String, Any?>())
+        val client = InstallationProxyClient(
+            ByteArrayInputStream(PropertyListServiceCodec.encode(response)),
+            ByteArrayOutputStream()
+        )
+
+        assertThrows(IOException::class.java) {
+            client.install("/PublicStaging/test.ipa")
+        }
+    }
+
 }
