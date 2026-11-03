@@ -121,16 +121,19 @@ internal object AppleSigningCompatibility {
             passwordChars.fill(0.toChar())
         }
         val baseCheck = check(metadata, profile, certificates, now, targetUdid)
-        val nestedBundles = findNestedCodeBundleInfoPlists(ipaFile)
+        val nestedBundles = inspectNestedCodeBundles(ipaFile)
         return if (nestedBundles.isEmpty()) {
             baseCheck
         } else {
+            val bundleSummary = nestedBundles.joinToString("; ") { bundle ->
+                "${bundle.bundleId ?: "không đọc được Bundle ID"} (${bundle.path})"
+            }
             baseCheck.copy(
                 warnings = baseCheck.warnings + listOf(
-                    "IPA có " + nestedBundles.size + " app extension/Watch bundle lồng nhau. " +
-                        "Bản hiện tại chỉ nhận một provisioning profile qua giao diện ký; chưa chọn và đối chiếu profile riêng cho từng bundle. " +
+                    "Phát hiện ${nestedBundles.size} app extension/Watch bundle: $bundleSummary. " +
+                        "Bản hiện tại chỉ nhận một provisioning profile qua giao diện ký; chưa chọn và đối chiếu profile riêng cho từng Bundle ID. " +
                         "zsign có thể xử lý nhiều profile qua nhiều tham số -m, nhưng Bo Sideload chưa cung cấp luồng đó. " +
-                        "Hãy kiểm tra từng extension sau khi ký và thử cài trên thiết bị trước khi sử dụng."
+                        "Không nên coi IPA này đã sẵn sàng cài đặt cho đến khi từng bundle được ký đúng profile và kiểm thử trên thiết bị."
                 )
             )
         }
@@ -188,6 +191,52 @@ internal object AppleSigningCompatibility {
     internal fun isNestedCodeBundleInfoPlistPath(path: String): Boolean =
         NESTED_CODE_BUNDLE_INFO_PATTERN.matches(path)
 
+    internal data class NestedBundleInfo(
+        val path: String,
+        val bundleId: String?,
+        val executable: String?
+    )
+
+    /**
+     * Reads nested extension/Watch Info.plist metadata with a strict per-entry
+     * size cap. This identifies bundle IDs for diagnostics only; it does not
+     * validate or sign each nested bundle with its own provisioning profile.
+     */
+    internal fun inspectNestedCodeBundles(ipaFile: java.io.File): List<NestedBundleInfo> {
+        val found = linkedMapOf<String, NestedBundleInfo>()
+        java.util.zip.ZipInputStream(ipaFile.inputStream().buffered()).use { zip ->
+            var entries = 0
+            while (true) {
+                val entry = zip.nextEntry ?: break
+                entries += 1
+                require(entries <= MAX_ARCHIVE_ENTRIES) {
+                    "IPA có quá nhiều mục ZIP khi quét app extension."
+                }
+                if (!entry.isDirectory && isNestedCodeBundleInfoPlistPath(entry.name)) {
+                    val output = java.io.ByteArrayOutputStream()
+                    val buffer = ByteArray(8 * 1024)
+                    while (true) {
+                        val count = zip.read(buffer)
+                        if (count < 0) break
+                        require(output.size() + count <= MAX_NESTED_PLIST_BYTES) {
+                            "Info.plist của extension vượt giới hạn 1 MB: ${entry.name}"
+                        }
+                        output.write(buffer, 0, count)
+                    }
+                    val metadata = IpaPlistReader.read(output.toByteArray())
+                    found[entry.name] = NestedBundleInfo(
+                        path = entry.name,
+                        bundleId = metadata?.bundleId,
+                        executable = metadata?.executable
+                    )
+                }
+                zip.closeEntry()
+            }
+        }
+        return found.values.toList()
+    }
+
+
     internal fun hasKnownProfilePrefix(
         applicationIdentifier: String,
         teamIdentifiers: List<String>,
@@ -232,6 +281,7 @@ internal object AppleSigningCompatibility {
     private const val MAX_IPA_BYTES = 2L * 1024L * 1024L * 1024L
     private const val MAX_CREDENTIAL_BYTES = 10L * 1024L * 1024L
     private const val MAX_ARCHIVE_ENTRIES = 100_000
+    private const val MAX_NESTED_PLIST_BYTES = 1024 * 1024
     private val APP_INFO_PLIST_PATTERN = Regex("^Payload/[^/]+\\.app/Info\\.plist$")
     private val NESTED_CODE_BUNDLE_INFO_PATTERN =
         Regex("^Payload/[^/]+\\.app/(?:PlugIns/[^/]+\\.appex|Watch/[^/]+\\.app)/Info\\.plist$")
