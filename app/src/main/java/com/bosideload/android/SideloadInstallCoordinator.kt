@@ -38,6 +38,21 @@ internal class SideloadInstallCoordinator(
         val stagingCleanupSucceeded: Boolean
     )
 
+    private fun removeStagedIpa(remotePath: String) {
+        val cleanupDescriptor = openLockdownSession().use { lockdown ->
+            LockdownServiceStarter.start(
+                channel = lockdown.channel,
+                identifier = AfcServiceConnection.AFC_SERVICE_IDENTIFIER
+            )
+        }
+        AfcServiceConnection.open(
+            transport = newTransport(),
+            deviceId = deviceId,
+            descriptor = cleanupDescriptor,
+            record = pairRecord
+        ).use { connection -> connection.client.removeStagedIpa(remotePath) }
+    }
+
     /**
      * Uploads the supplied IPA into the iPhone public staging directory, then
      * asks installation_proxy to install that exact remote path.
@@ -64,52 +79,64 @@ internal class SideloadInstallCoordinator(
                 identifier = AfcServiceConnection.AFC_SERVICE_IDENTIFIER
             )
         }
-        val upload = AfcServiceConnection.open(
-            transport = newTransport(),
-            deviceId = deviceId,
-            descriptor = afcDescriptor,
-            record = pairRecord
-        ).use { connection ->
-            connection.client.uploadFile(
-                remotePath = remotePath,
-                source = ipaInput,
-                expectedSize = ipaSizeBytes
-            ) { written, total ->
-                onProgress?.invoke(
-                    Progress(
-                        stage = Stage.UPLOADING_IPA,
-                        bytesTransferred = written,
-                        totalBytes = total,
-                        message = "Đang truyền IPA sang iPhone"
+        val upload: AfcClient.UploadResult
+        try {
+            upload = AfcServiceConnection.open(
+                transport = newTransport(),
+                deviceId = deviceId,
+                descriptor = afcDescriptor,
+                record = pairRecord
+            ).use { connection ->
+                connection.client.uploadFile(
+                    remotePath = remotePath,
+                    source = ipaInput,
+                    expectedSize = ipaSizeBytes
+                ) { written, total ->
+                    onProgress?.invoke(
+                        Progress(
+                            stage = Stage.UPLOADING_IPA,
+                            bytesTransferred = written,
+                            totalBytes = total,
+                            message = "Đang truyền IPA sang iPhone"
+                        )
                     )
-                )
+                }
             }
-        }
 
-        val installationDescriptor = openLockdownSession().use { lockdown ->
-            LockdownServiceStarter.start(
-                channel = lockdown.channel,
-                identifier = InstallationProxyServiceConnection.SERVICE_IDENTIFIER
-            )
-        }
-        InstallationProxyServiceConnection.open(
-            transport = newTransport(),
-            deviceId = deviceId,
-            descriptor = installationDescriptor,
-            record = pairRecord
-        ).use { connection ->
-            connection.client.install(
-                remotePackagePath = remotePath,
-                clientOptions = clientOptions
-            ) { status ->
-                onProgress?.invoke(
-                    Progress(
-                        stage = Stage.INSTALLING_APP,
-                        installPercent = status.percentComplete,
-                        message = status.status ?: status.error ?: "Đang cài ứng dụng trên iPhone"
-                    )
+            val installationDescriptor = openLockdownSession().use { lockdown ->
+                LockdownServiceStarter.start(
+                    channel = lockdown.channel,
+                    identifier = InstallationProxyServiceConnection.SERVICE_IDENTIFIER
                 )
             }
+            InstallationProxyServiceConnection.open(
+                transport = newTransport(),
+                deviceId = deviceId,
+                descriptor = installationDescriptor,
+                record = pairRecord
+            ).use { connection ->
+                connection.client.install(
+                    remotePackagePath = remotePath,
+                    clientOptions = clientOptions
+                ) { status ->
+                    onProgress?.invoke(
+                        Progress(
+                            stage = Stage.INSTALLING_APP,
+                            installPercent = status.percentComplete,
+                            message = status.status ?: status.error ?: "Đang cài ứng dụng trên iPhone"
+                        )
+                    )
+                }
+            }
+        } catch (failure: Exception) {
+            // A partial upload or failed install must not leave our staged IPA behind.
+            // Preserve the original operation error if best-effort cleanup also fails.
+            try {
+                removeStagedIpa(remotePath)
+            } catch (cleanupFailure: Exception) {
+                failure.addSuppressed(cleanupFailure)
+            }
+            throw failure
         }
 
         // Best-effort cleanup: a cleanup failure must not turn a confirmed
