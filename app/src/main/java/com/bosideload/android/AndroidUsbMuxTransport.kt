@@ -146,8 +146,8 @@ internal class AndroidUsbMuxTransport private constructor(
             return AndroidUsbMuxTransport(connection, usbInterface, inEndpoint, outEndpoint, timeoutMs)
         }
 
-        private const val USBMUX_CLASS = 0xFE
-        private const val USBMUX_SUBCLASS = 0x01
+        private const val USBMUX_CLASS = 0xFF
+        private const val USBMUX_SUBCLASS = 0xFE
         private const val USBMUX_PROTOCOL = 0x02
     }
 }
