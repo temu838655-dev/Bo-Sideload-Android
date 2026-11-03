@@ -1,6 +1,5 @@
 package com.bosideload.android
 
-import org.bouncycastle.asn1.ASN1Primitive
 import org.bouncycastle.asn1.DERNull
 import org.bouncycastle.asn1.x500.X500Name
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier
@@ -103,9 +102,9 @@ internal object ApplePairingMaterialGenerator {
 
         return Material(
             rootCertificatePem = pem(rootCert),
-            rootPrivateKeyPem = pem(rootPair),
+            rootPrivateKeyPem = pem(rootPair.private),
             hostCertificatePem = pem(hostCert),
-            hostPrivateKeyPem = pem(hostPair),
+            hostPrivateKeyPem = pem(hostPair.private),
             deviceCertificatePem = pem(deviceCert)
         )
     }
