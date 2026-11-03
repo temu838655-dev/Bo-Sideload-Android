@@ -96,7 +96,7 @@ class AppleLockdownPairingClientTest {
     @Test
     fun rejectsUsbSerialThatDoesNotMatchLockdownUdid() {
         val input = ByteArrayInputStream(
-            response(mapOf("Request" to "GetValue", "Value" to "DIFFERENT-UDID"))
+            response(mapOf("Request" to "GetValue", "Value" to "DIFFERENT-UDID-000"))
         )
         var persisted = false
         val output = ByteArrayOutputStream()
@@ -105,7 +105,7 @@ class AppleLockdownPairingClientTest {
         assertThrows(IOException::class.java) {
             client.pair(
                 LockdownSessionChannel(input, output),
-                "USB-SERIAL-UDID",
+                "USB-SERIAL-UDID-000",
                 "11111111-2222-3333-4444-555555555555",
                 "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE"
             )
