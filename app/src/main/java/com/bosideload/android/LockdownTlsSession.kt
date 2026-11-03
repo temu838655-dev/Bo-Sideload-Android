@@ -66,25 +66,24 @@ internal class LockdownTlsSession private constructor(
             transportSocket: Socket,
             record: PairRecord
         ): LockdownTlsSession {
-            record.validate()
-            val response = plainChannel.exchange(
-                LockdownRequests.startSession(record.hostId, record.systemBuid)
-            )
-            val success = response as? LockdownResponseParser.Response.Success
-                ?: throw IOException("Lockdown rejected StartSession")
-            if (success.request != "StartSession") {
-                throw IOException("unexpected Lockdown response to StartSession")
-            }
-            if (success.enableSessionSsl != true) {
-                throw IOException("Lockdown did not enable session TLS")
-            }
-            val sessionId = success.sessionId?.takeIf { it.isNotBlank() }
-                ?: throw IOException("Lockdown StartSession response has no SessionID")
-
             try {
+                record.validate()
+                val response = plainChannel.exchange(
+                    LockdownRequests.startSession(record.hostId, record.systemBuid)
+                )
+                val success = response as? LockdownResponseParser.Response.Success
+                    ?: throw IOException("Lockdown rejected StartSession")
+                if (success.request != "StartSession") {
+                    throw IOException("unexpected Lockdown response to StartSession")
+                }
+                if (success.enableSessionSsl != true) {
+                    throw IOException("Lockdown did not enable session TLS")
+                }
+                val sessionId = success.sessionId?.takeIf { it.isNotBlank() }
+                    ?: throw IOException("Lockdown StartSession response has no SessionID")
+
                 val context = createSslContext(record)
-                val factory = context.socketFactory
-                val ssl = factory.createSocket(
+                val ssl = context.socketFactory.createSocket(
                     transportSocket,
                     "lockdown-device",
                     62078,
@@ -98,8 +97,12 @@ internal class LockdownTlsSession private constructor(
                     channel = LockdownSessionChannel(ssl.inputStream, ssl.outputStream)
                 )
             } catch (error: Exception) {
+                // StartSession can fail before TLS is created (for example,
+                // when the device rejects the saved pairing record). Close the
+                // underlying USBMux stream in every failure path.
                 runCatching { transportSocket.close() }
-                throw IOException("Lockdown TLS handshake failed", error)
+                if (error is IOException) throw error
+                throw IOException("Could not establish authenticated Lockdown TLS session", error)
             }
         }
 
