@@ -142,6 +142,50 @@ class AfcClientTest {
         assertEquals(listOf(0x0DL, 0x10L, 0x14L), requestOperations(requests.toByteArray()))
     }
 
+    @Test
+    fun removesOnlyUuidNamedBoSideloadStagingIpa() {
+        val remotePath = "/PublicStaging/BoSideload-12345678-abcd-1234-abcd-1234567890ab.ipa"
+        val responses = ByteArrayInputStream(response(1, 0x01, status(0)))
+        val requests = ByteArrayOutputStream()
+
+        AfcClient(responses, requests).use { client ->
+            client.removeStagedIpa(remotePath)
+        }
+
+        val wire = requests.toByteArray()
+        assertEquals(listOf(0x08L), requestOperations(wire))
+        val header = AfcPacketCodec.decodeHeader(wire.copyOfRange(0, AfcPacketCodec.HEADER_SIZE))
+        val body = wire.copyOfRange(AfcPacketCodec.HEADER_SIZE, header.entireLength.toInt())
+        assertEquals(remotePath + "\\u0000", String(body, Charsets.UTF_8))
+    }
+
+    @Test
+    fun refusesToRemovePathOutsideBoSideloadStagingPattern() {
+        val requests = ByteArrayOutputStream()
+        val error = assertThrows(IOException::class.java) {
+            AfcClient(ByteArrayInputStream(byteArrayOf()), requests).use { client ->
+                client.removeStagedIpa("/PublicStaging/ImportantDocument.ipa")
+            }
+        }
+        assertEquals("Refusing to remove a path not owned by Bo Sideload", error.message)
+        assertEquals(0, requests.size())
+    }
+
+    @Test
+    fun reportsDeviceFailureWhenRemovingStagedIpa() {
+        val remotePath = "/PublicStaging/BoSideload-12345678-abcd-1234-abcd-1234567890ab.ipa"
+        val responses = ByteArrayInputStream(response(1, 0x01, status(8)))
+        val requests = ByteArrayOutputStream()
+
+        val error = assertThrows(IOException::class.java) {
+            AfcClient(responses, requests).use { client ->
+                client.removeStagedIpa(remotePath)
+            }
+        }
+        assertEquals("AFC RemovePath failed with status 8", error.message)
+        assertEquals(listOf(0x08L), requestOperations(requests.toByteArray()))
+    }
+
     private fun requestOperations(wire: ByteArray): List<Long> {
         val operations = mutableListOf<Long>()
         var offset = 0
