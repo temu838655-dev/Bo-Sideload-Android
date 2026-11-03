@@ -144,7 +144,7 @@ class MainActivity : Activity() {
             setPadding(0, dp(28), 0, dp(12))
         }, fullWidth())
         page.addView(label(
-            "Bộ ký: zsign Android 1.1.3 (MIT), chạy cục bộ. Có thể ký lại IPA bằng P12 và provisioning profile. Việc ký không đồng nghĩa iPhone chắc chắn cài được. Đã có màn hình dò thiết bị USB và kiểm tra quyền USB. Ghép đôi Lockdown, kết nối Wi-Fi và cài IPA trực tiếp lên iPhone vẫn chưa được triển khai.",
+            "Bộ ký: zsign Android 1.1.3 (MIT), chạy cục bộ. Có thể ký lại IPA bằng P12 và provisioning profile. Việc ký không đồng nghĩa iPhone chắc chắn cài được. Đã có màn hình dò USB, xin quyền Android và thử gửi usbmux Listen để nhận sự kiện thiết bị. Chưa có ghép đôi Lockdown đáng tin cậy, kết nối Wi-Fi hoặc cài IPA trực tiếp lên iPhone.",
             12f, secondaryText, false
         ).apply { setPadding(dp(4), dp(8), dp(4), 0) }, fullWidth())
         setContentView(scroll)
