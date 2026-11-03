@@ -34,9 +34,9 @@ Bo Sideload is intended to use Wi-Fi as its primary transport. USB remains a fal
 ## Implementation order
 
 1. Replace the experimental direct-IP Lockdown pairing attempt with protocol-correct Wi-Fi-first guidance. (Done)
-2. Add Android NSD/mDNS discovery for the legacy `_apple-mobdev2._tcp.` Wi-Fi Sync service. (Implemented as untrusted discovery only)
-3. Match discovered services to encrypted pairing records and validate the advertised authentication tag before opening any socket.
-4. Add iOS 27+ device-initiated RPPairing host advertisement, PIN handoff, and a reviewed, pinned protocol backend.
+2. Add Android NSD/mDNS discovery for the legacy `_apple-mobdev2._tcp.` Wi-Fi Sync service. (Implemented)
+3. Match discovered services to encrypted pairing records, then let the user initiate a bounded TCP connection and authenticate the Lockdown TLS session against the pinned DeviceCertificate. (Implemented; requires physical-device validation)
+4. Add iOS 27+ device-initiated RPPairing host advertisement, PIN handoff, and a reviewed, pinned protocol backend. (Not implemented)
 5. Build the authenticated RPPairing TLS-PSK/software TCP tunnel and RSD provider.
 6. Implement IPA upload/install over the services actually exposed by the connected iPhone.
 7. Add integration tests, then validate on physical iPhones across supported iOS versions and Wi-Fi routers.
@@ -44,4 +44,4 @@ Bo Sideload is intended to use Wi-Fi as its primary transport. USB remains a fal
 
 ## Current status
 
-The existing Kotlin USB pairing and USB installation path is retained. The direct TCP connection to port 62078 is not a valid general-purpose first-pairing method and has been removed from the UI. Wi-Fi IPA installation is not yet implemented or claimed as working. CI success only proves Android compilation and unit checks; it does not prove real iPhone interoperability.
+The existing Kotlin USB pairing and USB installation path is retained. Legacy Wi-Fi Sync now supports Bonjour discovery, local authTag candidate matching, and a user-triggered Lockdown StartSession/TLS handshake that pins the server certificate to the stored DeviceCertificate. A successful TLS session is held until the screen is destroyed. This is not RemotePairing and does not yet expose AFC or Installation Proxy over Wi-Fi, so Wi-Fi IPA transfer/installation is not implemented or claimed as working. The direct-IP first-pairing flow remains removed. CI success proves compilation and automated checks only; physical iPhone interoperability still needs validation.
