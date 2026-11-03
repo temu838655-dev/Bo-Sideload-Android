@@ -60,11 +60,27 @@ internal class PairedServiceTlsSocket private constructor(
 
         private fun createContext(record: PairRecord): SSLContext {
             val rootCertificate = parseCertificate(record.rootCertificate)
+            val hostCertificate = parseCertificate(record.hostCertificate)
             val deviceCertificate = parseCertificate(record.deviceCertificate)
-            val rootPrivateKey = parsePrivateKey(record.rootKeyMaterial)
+            // Present the paired host identity to the Apple service. The root
+            // certificate is the issuer, not the client identity.
+            try {
+                hostCertificate.verify(rootCertificate.publicKey)
+                deviceCertificate.verify(rootCertificate.publicKey)
+                hostCertificate.checkValidity()
+                rootCertificate.checkValidity()
+            } catch (error: Exception) {
+                throw IOException("Pair record certificates are not valid under the saved root certificate", error)
+            }
+            val hostPrivateKey = parsePrivateKey(record.hostKeyMaterial)
             val identity = KeyStore.getInstance(KeyStore.getDefaultType()).apply {
                 load(null)
-                setKeyEntry("bo-service-root", rootPrivateKey, CharArray(0), arrayOf(rootCertificate))
+                setKeyEntry(
+                    "bo-service-host",
+                    hostPrivateKey,
+                    CharArray(0),
+                    arrayOf(hostCertificate, rootCertificate)
+                )
             }
             val keyManagers = KeyManagerFactory.getInstance(
                 KeyManagerFactory.getDefaultAlgorithm()
