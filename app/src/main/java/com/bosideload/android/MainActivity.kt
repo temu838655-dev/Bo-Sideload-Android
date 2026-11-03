@@ -106,7 +106,7 @@ class MainActivity : Activity() {
         page.addView(installSignedButton, fullWidth())
 
         page.addView(Button(this).apply {
-            text = "Apple ID miễn phí • iPhone / MacBook / Apple TV"
+            text = "Hướng dẫn Apple Signing • Miễn phí & trả phí"
             isAllCaps = false
             setOnClickListener {
                 startActivity(Intent(this@MainActivity, AppleSigningGuideActivity::class.java))
