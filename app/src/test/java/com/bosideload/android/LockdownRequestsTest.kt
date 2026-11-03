@@ -33,6 +33,17 @@ class LockdownRequestsTest {
         assertEquals("SYSTEM-BUID", message["SystemBUID"])
     }
 
+    @Test fun startServiceIncludesIdentifierAndOptionalEscrowBag() {
+        val withoutEscrow = decode(LockdownRequests.startService("com.apple.mobile.installation_proxy"))
+        assertEquals("StartService", withoutEscrow["Request"])
+        assertEquals("com.apple.mobile.installation_proxy", withoutEscrow["Service"])
+        assertFalse(withoutEscrow.containsKey("EscrowBag"))
+
+        val escrow = byteArrayOf(8, 6, 7, 5, 3, 0, 9)
+        val withEscrow = decode(LockdownRequests.startService("com.apple.mobile.installation_proxy", escrow))
+        assertEquals(escrow.toList(), (withEscrow["EscrowBag"] as ByteArray).toList())
+    }
+
     @Test fun pairRequestContainsOnlyPublicCertificatesAndIdentifiers() {
         val message = decode(LockdownRequests.pair(
             "DEVICE-CERT".toByteArray(),
@@ -65,6 +76,11 @@ class LockdownRequestsTest {
     @Test fun rejectsBlankSessionIdentifiers() {
         assertTrue(runCatching { LockdownRequests.startSession("", "BUID") }.isFailure)
         assertTrue(runCatching { LockdownRequests.startSession("HOST", " ") }.isFailure)
+    }
+
+    @Test fun rejectsInvalidServiceStartArguments() {
+        assertTrue(runCatching { LockdownRequests.startService(" ") }.isFailure)
+        assertTrue(runCatching { LockdownRequests.startService("service", byteArrayOf()) }.isFailure)
     }
 
     @Test fun rejectsBlankGetValueSelectors() {

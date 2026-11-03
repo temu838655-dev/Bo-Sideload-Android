@@ -27,6 +27,16 @@ class LockdownResponseParserTest {
         assertEquals(true, result.enableSessionSsl)
     }
 
+    @Test fun parsesStartServiceDescriptorFields() {
+        val result = LockdownResponseParser.parse(LockdownPlistCodec.encode(mapOf(
+            "Request" to "StartService",
+            "Port" to 54321L,
+            "EnableServiceSSL" to true
+        ))) as LockdownResponseParser.Response.Success
+        assertEquals(54321L, result.port)
+        assertEquals(true, result.enableServiceSsl)
+    }
+
     @Test fun preservesEscrowBagFromSuccessfulPairResponse() {
         val escrow = byteArrayOf(3, 1, 4, 1, 5)
         val result = LockdownResponseParser.parse(

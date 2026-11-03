@@ -1,8 +1,8 @@
 package com.bosideload.android
 
 /**
- * Builders for non-mutating Lockdown discovery requests and the authenticated
- * StartSession request. Pairing material is deliberately not generated here.
+ * Builders for Lockdown discovery, pairing, session, and service-start requests.
+ * Private keys are never included in requests sent to the device.
  */
 internal object LockdownRequests {
     private const val LABEL = "Bo-Sideload Android"
@@ -18,10 +18,6 @@ internal object LockdownRequests {
         })
     }
 
-    /**
-     * Builds the user-authorized Apple Pair request. Private keys are never
-     * included in the PairRecord sent over Lockdown.
-     */
     fun pair(
         deviceCertificate: ByteArray,
         hostCertificate: ByteArray,
@@ -53,6 +49,19 @@ internal object LockdownRequests {
             "HostID" to hostId,
             "SystemBUID" to systemBuid
         ))
+    }
+
+    /**
+     * Requests a device service. EscrowBag is included only when one was
+     * returned by the successful Pair operation and persisted in the record.
+     */
+    fun startService(identifier: String, escrowBag: ByteArray? = null): ByteArray {
+        require(identifier.isNotBlank()) { "service identifier must not be blank" }
+        require(escrowBag == null || escrowBag.isNotEmpty()) { "EscrowBag must not be empty" }
+        return request("StartService", buildMap {
+            put("Service", identifier)
+            if (escrowBag != null) put("EscrowBag", escrowBag)
+        })
     }
 
     private fun request(name: String, fields: Map<String, Any?> = emptyMap()): ByteArray {

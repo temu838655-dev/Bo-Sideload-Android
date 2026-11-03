@@ -11,7 +11,9 @@ internal object LockdownResponseParser {
             val value: Any?,
             val sessionId: String?,
             val enableSessionSsl: Boolean?,
-            val escrowBag: ByteArray?
+            val escrowBag: ByteArray?,
+            val port: Long? = null,
+            val enableServiceSsl: Boolean? = null
         ) : Response()
         data class Failure(
             val request: String?,
@@ -33,12 +35,16 @@ internal object LockdownResponseParser {
         }
         val sessionId = message["SessionID"] as? String
         val ssl = message["EnableSessionSSL"] as? Boolean
+        val port = (message["Port"] as? Number)?.toLong()
+        val serviceSsl = message["EnableServiceSSL"] as? Boolean
         return Response.Success(
             request = request,
             value = message["Value"],
             sessionId = sessionId,
             enableSessionSsl = ssl,
-            escrowBag = message["EscrowBag"] as? ByteArray
+            escrowBag = message["EscrowBag"] as? ByteArray,
+            port = port,
+            enableServiceSsl = serviceSsl
         )
     }
 }
