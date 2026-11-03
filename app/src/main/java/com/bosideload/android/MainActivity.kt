@@ -86,6 +86,15 @@ class MainActivity : Activity() {
                 startActivity(Intent(this@MainActivity, DeviceConnectionActivity::class.java))
             }
         }, fullWidth())
+        page.addView(Button(this).apply {
+            text = "Quét và kết nối iPhone qua Wi-Fi"
+            isAllCaps = false
+            setOnClickListener {
+                startActivity(Intent(this@MainActivity, DeviceConnectionActivity::class.java).apply {
+                    putExtra(DeviceConnectionActivity.EXTRA_START_WIFI_SCAN, true)
+                })
+            }
+        }, fullWidth())
         installSignedButton = Button(this).apply {
             text = "Cài IPA đã ký lên iPhone (USB / Wi-Fi)"
             isAllCaps = false
@@ -105,6 +114,13 @@ class MainActivity : Activity() {
         }
         page.addView(installSignedButton, fullWidth())
 
+        page.addView(Button(this).apply {
+            text = "Kết nối Apple Developer (Team API)"
+            isAllCaps = false
+            setOnClickListener {
+                startActivity(Intent(this@MainActivity, AppleConnectActivity::class.java))
+            }
+        }, fullWidth())
         page.addView(Button(this).apply {
             text = "Hướng dẫn Apple Signing • Miễn phí & trả phí"
             isAllCaps = false
