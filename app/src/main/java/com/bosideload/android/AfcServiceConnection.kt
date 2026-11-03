@@ -232,6 +232,17 @@ internal fun validatePairedServiceCertificates(
         if (deviceCertificate.issuerX500Principal != rootCertificate.subjectX500Principal) {
             throw IOException("DeviceCertificate issuer does not match the saved root")
         }
+        if (rootCertificate.basicConstraints < 0) {
+            throw IOException("saved root certificate is not marked as a certificate authority")
+        }
+        if (hostCertificate.basicConstraints >= 0 || deviceCertificate.basicConstraints >= 0) {
+            throw IOException("paired host and device certificates must not be certificate authorities")
+        }
+        if (hostCertificate.keyUsage?.getOrNull(0) != true ||
+            deviceCertificate.keyUsage?.getOrNull(0) != true
+        ) {
+            throw IOException("paired host and device certificates must allow digital signatures")
+        }
         rootCertificate.verify(rootCertificate.publicKey)
         hostCertificate.verify(rootCertificate.publicKey)
         deviceCertificate.verify(rootCertificate.publicKey)
