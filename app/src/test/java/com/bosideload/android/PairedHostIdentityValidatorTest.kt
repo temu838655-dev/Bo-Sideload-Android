@@ -8,6 +8,9 @@ import java.security.PrivateKey
 import java.security.cert.X509Certificate
 import java.util.Date
 import org.bouncycastle.asn1.x500.X500Name
+import org.bouncycastle.asn1.x509.BasicConstraints
+import org.bouncycastle.asn1.x509.Extension
+import org.bouncycastle.asn1.x509.KeyUsage
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter
 import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder
@@ -105,6 +108,14 @@ class PairedHostIdentityValidatorTest {
             subject,
             pair.public
         )
+        builder.addExtension(Extension.basicConstraints, true, BasicConstraints(issuerIdentity == null))
+        if (issuerIdentity != null) {
+            builder.addExtension(
+                Extension.keyUsage,
+                true,
+                KeyUsage(KeyUsage.digitalSignature or KeyUsage.keyEncipherment)
+            )
+        }
         val signer = JcaContentSignerBuilder("SHA256withRSA").build(signingKey)
         val certificate = JcaX509CertificateConverter().getCertificate(builder.build(signer))
         certificate.verify(issuerIdentity?.certificate?.publicKey ?: pair.public)
