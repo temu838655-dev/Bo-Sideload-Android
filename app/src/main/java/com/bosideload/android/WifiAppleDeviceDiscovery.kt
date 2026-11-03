@@ -29,7 +29,7 @@ internal class WifiAppleDeviceDiscovery(
         val serviceName: String,
         val hostAddress: String,
         val port: Int,
-        val txtKeys: Set<String>
+        val txtRecord: Map<String, String>
     )
 
     private val appContext = context.applicationContext
@@ -71,7 +71,7 @@ internal class WifiAppleDeviceDiscovery(
                                 serviceName = info.serviceName,
                                 hostAddress = address,
                                 port = port,
-                                txtKeys = info.attributes.keys.toSet()
+                                txtRecord = info.attributes.mapValues { (_, value) -> String(value, Charsets.UTF_8) }
                             )
                         )
                     }
