@@ -33,7 +33,7 @@ internal class AppleLockdownPairingClient(
         if (udidSuccess.request != "GetValue") {
             throw IOException("Lockdown returned an unexpected response to UniqueDeviceID")
         }
-        val lockdowmUdid = (udidSuccess.value as? String)?.trim()
+        val lockdownUdid = (udidSuccess.value as? String)?.trim()
             ?: throw IOException("Lockdown UniqueDeviceID was missing or had an unsupported type")
         if (!isPlausibleUdid(lockdowmUdid)) {
             throw IOException("Lockdown returned an invalid UniqueDeviceID")
@@ -76,10 +76,10 @@ internal class AppleLockdownPairingClient(
         }
     }
 
-    internal fun isPlausibleUdid(value: String): Boolean =
-        value.length in 16..64 && value.all { it.isLetterOrDigit() || it == '-' }
+    internal companion object {
+        fun isPlausibleUdid(value: String): Boolean =
+            value.length in 16..64 && value.all { it.isLetterOrDigit() || it == '-' }
 
-    private companion object {
         const val DEVICE_UDID_KEY = "UniqueDeviceID"
         const val DEVICE_PUBLIC_KEY_KEY = "DevicePublicKey"
         const val MAX_DEVICE_PUBLIC_KEY_BYTES = 64 * 1024
