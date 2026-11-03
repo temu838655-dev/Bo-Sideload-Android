@@ -84,8 +84,10 @@ class AppleConnectActivity : Activity() {
                 status.text = "Đã xóa khóa API và dữ liệu mã hóa khỏi ứng dụng trên thiết bị."
             }
         }, full())
-        status = label("Chưa kết nối. Bước này chỉ đọc danh sách certificate.", 13, 0xFFB8C5D8.toInt(), false).apply {
-            setPadding(dp(12), dp(12), dp(12), dp(12)); setBackgroundColor(0xFF162135.toInt())
+        status = label("Chưa kết nối. Hãy lưu Team API Key và kiểm tra quyền với Apple.", 13, 0xFFB8C5D8.toInt(), false).apply {
+            setPadding(dp(12), dp(12), dp(12), dp(12))
+            setBackgroundColor(0xFF162135.toInt())
+            setTextIsSelectable(true)
         }
         page.addView(status, full())
         page.addView(label(
@@ -98,6 +100,12 @@ class AppleConnectActivity : Activity() {
             status.text = "Đã lưu thông tin API Key được mã hóa trên thiết bị. Chưa xác minh loại key hoặc quyền truy cập; bấm kiểm tra để xác nhận với Apple."
         }
         setContentView(scroll)
+    }
+
+    override fun onDestroy() {
+        pendingP12?.fill(0); pendingP12 = null
+        pendingProfile?.fill(0); pendingProfile = null
+        super.onDestroy()
     }
 
     private fun field(hintValue: String) = EditText(this).apply {
