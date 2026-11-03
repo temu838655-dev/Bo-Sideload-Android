@@ -6,6 +6,37 @@ import org.junit.Test
 
 class AppleSigningCompatibilityTest {
     @Test
+    fun deviceEligibilityRequiresMatchingUdidForDevelopmentProfiles() {
+        val devices = listOf("00008030-001C195E0E91802E", "AABBCCDD")
+        assertTrue(AppleSigningCompatibility.isDeviceProvisioned(
+            devices, false, "00008030-001C195E0E91802E"
+        ) == true)
+        assertTrue(AppleSigningCompatibility.isDeviceProvisioned(
+            devices, false, "00008030-001C195E0E91802e"
+        ) == true)
+        assertTrue(AppleSigningCompatibility.isDeviceProvisioned(
+            devices, false, "NOT-REGISTERED"
+        ) == false)
+    }
+
+    @Test
+    fun allDevicesProfilesDoNotRequireUdid() {
+        assertTrue(AppleSigningCompatibility.isDeviceProvisioned(
+            emptyList(), true, null
+        ) == true)
+    }
+
+    @Test
+    fun missingDeviceOrProfileListRemainsUnknown() {
+        assertTrue(AppleSigningCompatibility.isDeviceProvisioned(
+            listOf("DEVICE-1"), false, null
+        ) == null)
+        assertTrue(AppleSigningCompatibility.isDeviceProvisioned(
+            emptyList(), false, "DEVICE-1"
+        ) == null)
+    }
+
+    @Test
     fun recognizesOnlyTheMainApplicationInfoPlistPath() {
         assertTrue(AppleSigningCompatibility.isAppInfoPlistPath("Payload/Example.app/Info.plist"))
         assertFalse(AppleSigningCompatibility.isAppInfoPlistPath("Payload/Example.app/PlugIns/Widget.appex/Info.plist"))
