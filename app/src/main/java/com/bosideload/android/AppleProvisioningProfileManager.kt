@@ -35,6 +35,65 @@ internal object AppleProvisioningProfileManager {
         val profileContent: ByteArray? = null
     )
 
+    /** Read-only discovery so users can obtain the Apple resource IDs required by profile creation. */
+    fun listResources(credentials: AppleConnectCredentialVault.Credentials): Result {
+        val endpoints = listOf(
+            "App IDs" to "/v1/bundleIds?limit=100&fields%5BbundleIds%5D=identifier,name,platform",
+            "Certificates" to "/v1/certificates?limit=100&fields%5Bcertificates%5D=displayName,certificateType,serialNumber,expirationDate",
+            "Devices" to "/v1/devices?limit=100&fields%5Bdevices%5D=name,udid,platform,status"
+        )
+        val sections = mutableListOf<String>()
+        return try {
+            for ((label, path) in endpoints) {
+                val connection = URL("https://api.appstoreconnect.apple.com" + path)
+                    .openConnection() as HttpsURLConnection
+                val response = try {
+                    connection.requestMethod = "GET"
+                    connection.connectTimeout = 15000
+                    connection.readTimeout = 25000
+                    connection.setRequestProperty("Authorization", "Bearer " + AppleConnectJwt.token(credentials))
+                    connection.setRequestProperty("Accept", "application/json")
+                    val code = connection.responseCode
+                    val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+                    val body = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+                    if (code !in 200..299) {
+                        val detail = runCatching {
+                            JSONObject(body).optJSONArray("errors")?.optJSONObject(0)
+                                ?.optString("detail").orEmpty()
+                        }.getOrDefault("")
+                        throw IllegalStateException("$label: HTTP $code " + detail.ifBlank { body.take(180) })
+                    }
+                    JSONObject(body)
+                } finally {
+                    connection.disconnect()
+                }
+                val data = response.optJSONArray("data") ?: JSONArray()
+                val lines = mutableListOf<String>()
+                for (i in 0 until data.length()) {
+                    val item = data.optJSONObject(i) ?: continue
+                    val attrs = item.optJSONObject("attributes") ?: JSONObject()
+                    val id = item.optString("id")
+                    val detail = when (label) {
+                        "App IDs" -> attrs.optString("identifier") + " — " + attrs.optString("name") +
+                            " — " + attrs.optString("platform")
+                        "Certificates" -> attrs.optString("displayName") + " — " +
+                            attrs.optString("certificateType") + " — hết hạn " + attrs.optString("expirationDate")
+                        else -> attrs.optString("name") + " — " + attrs.optString("udid") +
+                            " — " + attrs.optString("platform") + " — " + attrs.optString("status")
+                    }
+                    if (id.isNotBlank()) lines += "ID: $id\n$detail"
+                }
+                sections += if (lines.isEmpty()) "$label: không có dữ liệu trong 100 mục đầu tiên."
+                    else "$label:\n" + lines.joinToString("\n\n")
+            }
+            Result(true, sections.joinToString("\n\n"))
+        } catch (error: Exception) {
+            Result(false, "Không đọc được danh sách tài nguyên Apple: " +
+                (error.message ?: error.javaClass.simpleName) +
+                if (sections.isNotEmpty()) "\n\n" + sections.joinToString("\n\n") else "")
+        }
+    }
+
     fun create(
         credentials: AppleConnectCredentialVault.Credentials,
         request: Request
