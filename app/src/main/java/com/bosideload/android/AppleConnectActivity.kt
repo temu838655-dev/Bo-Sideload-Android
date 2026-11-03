@@ -47,7 +47,7 @@ class AppleConnectActivity : Activity() {
             setOnClickListener { saveAndValidate() }
         }, full())
         page.addView(Button(this).apply {
-            text = "③ Tạo khóa ký P-256 và CSR trên thiết bị"; isAllCaps = false
+            text = "③ Tạo khóa ký RSA-2048 và CSR trên thiết bị"; isAllCaps = false
             setOnClickListener { generateLocalCsr() }
         }, full())
         page.addView(Button(this).apply {
@@ -130,7 +130,7 @@ class AppleConnectActivity : Activity() {
 
 
     private fun generateLocalCsr() {
-        status.text = "Đang tạo khóa ký P-256 và CSR cục bộ…"
+        status.text = "Đang tạo khóa ký RSA-2048 và CSR cục bộ…"
         Thread {
             val result = runCatching {
                 val generated = AppleCsrGenerator.generate()
@@ -140,7 +140,7 @@ class AppleConnectActivity : Activity() {
             runOnUiThread {
                 result.onSuccess {
                     currentCsr = it
-                    status.text = "Đã tạo cặp khóa P-256 và CSR. Khóa riêng được mã hóa bằng Android Keystore; CSR sẵn sàng xuất. Chưa gửi dữ liệu lên Apple."
+                    status.text = "Đã tạo cặp khóa RSA-2048 và CSR. Khóa riêng được mã hóa bằng Android Keystore; CSR sẵn sàng xuất. Chưa gửi dữ liệu lên Apple."
                 }.onFailure {
                     status.text = "Không tạo được CSR: " + (it.message ?: "lỗi không xác định")
                 }
