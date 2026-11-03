@@ -156,6 +156,7 @@ class DeviceConnectionActivity : Activity() {
                                     setTextColor(-1)
                                 })
                                 if (match != null) {
+                                    var wifiInstallButton: Button? = null
                                     val connectButton = Button(this@DeviceConnectionActivity).apply {
                                         text = "Xác thực kết nối Wi-Fi"
                                         isAllCaps = false
@@ -183,6 +184,7 @@ class DeviceConnectionActivity : Activity() {
                                                         activeWifiLockdownSession?.close()
                                                         activeWifiLockdownSession = authenticated
                                                         text = "Đã xác thực TLS"
+                                                        wifiInstallButton?.isEnabled = true
                                                         status.text = "Đã xác thực Lockdown TLS với iPhone qua Wi-Fi. Phiên đang được giữ an toàn; truyền IPA/cài đặt qua Wi-Fi chưa được nối ở bước này."
                                                     } else {
                                                         isEnabled = true
@@ -193,7 +195,7 @@ class DeviceConnectionActivity : Activity() {
                                         }
                                     }
                                     card.addView(connectButton)
-                                    val wifiInstallButton = Button(this@DeviceConnectionActivity).apply {
+                                    wifiInstallButton = Button(this@DeviceConnectionActivity).apply {
                                         text = "Cài IPA qua Wi-Fi"
                                         isAllCaps = false
                                         isEnabled = false
@@ -250,9 +252,6 @@ class DeviceConnectionActivity : Activity() {
                                         }
                                     }
                                     card.addView(wifiInstallButton)
-                                    connectButton.setOnClickListener {
-                                        wifiInstallButton.isEnabled = false
-                                    }
                                 }
                                 wifiDevicesPanel.addView(card, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
                                 status.text = if (match != null) {
