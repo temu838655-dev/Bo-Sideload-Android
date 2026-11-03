@@ -230,6 +230,10 @@ class DeviceConnectionActivity : Activity() {
                                             deviceInfo.productId?.let { append("\\nProduct ID: ").append(hex(it.toInt())) }
                                             append("\\nĐây chưa phải xác nhận Lockdown pairing.")
                                         }
+                                        // Keep the Android USB device that owns this usbmux
+                                        // interface; Lockdown pairing and IPA installation
+                                        // must reopen this exact USB device after Listen stops.
+                                        attachedAppleDevice = device
                                         attachedUsbmuxDeviceId = deviceInfo.deviceId
                                         attachedDeviceSerial = deviceInfo.serialNumber
                                         updatePairingActions(deviceInfo.serialNumber)
