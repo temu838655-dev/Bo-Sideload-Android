@@ -114,9 +114,20 @@ internal class LockdownTlsSession private constructor(
             // Lockdown StartSession authenticates this host with the paired
             // HostCertificate/HostPrivateKey. The Root identity is reserved
             // for service TLS handshakes (AFC / installation_proxy).
+            val rootCertificate = parseCertificate(record.rootCertificate)
             val hostCertificate = parseCertificate(record.hostCertificate)
             val deviceCertificate = parseCertificate(record.deviceCertificate)
             val hostPrivateKey = parsePrivateKey(record.hostKeyMaterial)
+
+            // Apply the same pairing-chain and key checks before StartSession TLS
+            // as before service TLS. A malformed saved record must never reach
+            // the host-authentication handshake.
+            validatePairedServiceCertificates(
+                rootCertificate,
+                hostCertificate,
+                deviceCertificate
+            )
+            verifyPairedHostPrivateKeyMatchesCertificate(hostPrivateKey, hostCertificate)
 
             val identityStore = KeyStore.getInstance(KeyStore.getDefaultType()).apply {
                 load(null)
