@@ -18,6 +18,34 @@ internal object LockdownRequests {
         })
     }
 
+    /**
+     * Builds the user-authorized Apple Pair request. Private keys are never
+     * included in the PairRecord sent over Lockdown.
+     */
+    fun pair(
+        deviceCertificate: ByteArray,
+        hostCertificate: ByteArray,
+        rootCertificate: ByteArray,
+        hostId: String,
+        systemBuid: String
+    ): ByteArray {
+        require(deviceCertificate.isNotEmpty()) { "DeviceCertificate must not be empty" }
+        require(hostCertificate.isNotEmpty()) { "HostCertificate must not be empty" }
+        require(rootCertificate.isNotEmpty()) { "RootCertificate must not be empty" }
+        require(hostId.isNotBlank()) { "HostID must not be blank" }
+        require(systemBuid.isNotBlank()) { "SystemBUID must not be blank" }
+        return request("Pair", linkedMapOf(
+            "ProtocolVersion" to "2",
+            "PairRecord" to linkedMapOf(
+                "DeviceCertificate" to deviceCertificate,
+                "HostCertificate" to hostCertificate,
+                "HostID" to hostId,
+                "RootCertificate" to rootCertificate,
+                "SystemBUID" to systemBuid
+            )
+        ))
+    }
+
     fun startSession(hostId: String, systemBuid: String): ByteArray {
         require(hostId.isNotBlank()) { "HostID must not be blank" }
         require(systemBuid.isNotBlank()) { "SystemBUID must not be blank" }
