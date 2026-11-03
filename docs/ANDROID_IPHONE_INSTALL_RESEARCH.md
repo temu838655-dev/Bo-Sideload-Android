@@ -27,3 +27,15 @@ Do not expose an enabled "Install to iPhone" action until the Android native sta
 ## Licensing
 
 Review each upstream component's license before bundling. libimobiledevice/libusbmuxd use LGPL-family licensing; usbmuxd and ideviceinstaller have separate GPL licensing. Keep each license and notice with the corresponding bundled component and review distribution obligations before release.
+
+## Implemented protocol groundwork (2026-11-03)
+
+The Android app now contains small, bounded framing helpers with unit tests:
+
+- `UsbMuxPacketHeader`: validates the 16-byte little-endian usbmux packet header.
+- `UsbMuxPacketCodec`: reads/writes complete usbmux packets and rejects oversized or truncated packets.
+- `LockdownPacketCodec`: reads/writes the 4-byte big-endian length-prefixed Lockdown payload framing and rejects negative, oversized, or truncated payloads.
+
+These are protocol building blocks only. They do not yet serialize/parse Apple plist messages, open an Android USB bulk transport, issue usbmux Listen/Connect requests, complete the Lockdown StartSession/Pair flow, create or store a pairing record, start the Installation Proxy service, or install an application. No UI should describe USB detection as a trusted iPhone connection.
+
+The next implementation gate is a real transport adapter plus plist request/response handling, followed by a pairing flow tested with a physical iPhone and explicit user approval. Keep pairing records protected by Android Keystore-backed encryption and never log pairing secrets.
