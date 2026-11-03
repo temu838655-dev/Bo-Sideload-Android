@@ -94,15 +94,15 @@ internal class InstallationProxyClient(
         onProgress: ((InstallationProgress) -> Unit)? = null
     ) {
         checkOpen()
-        check(operationInProgress.compareAndSet(false, true)) {
-            "an installation_proxy operation is already running"
-        }
         require(remotePackagePath.startsWith("/") && remotePackagePath.length > 1) {
             "PackagePath must be an absolute device path"
         }
         require('\u0000' !in remotePackagePath) { "PackagePath contains NUL" }
         require(!remotePackagePath.split('/').any { it == "." || it == ".." }) {
             "PackagePath contains traversal segments"
+        }
+        check(operationInProgress.compareAndSet(false, true)) {
+            "an installation_proxy operation is already running"
         }
         try {
             val command = linkedMapOf<String, Any?>(
