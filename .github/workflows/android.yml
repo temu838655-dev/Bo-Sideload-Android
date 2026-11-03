@@ -26,11 +26,11 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p app/src/main/assets/zsign/arm64-v8a app/src/main/assets/zsign/armeabi-v7a
-          curl -fL --retry 3 "https://github.com/zhlynn/zsign/releases/download/v1.1.2/zsign-android-arm64-v8a.tar.gz" -o /tmp/zsign-arm64.tar.gz
-          echo "822d2b59cd7eb91f692c392cea92534295add7dac1c10ca17bc254b5c3794082  /tmp/zsign-arm64.tar.gz" | sha256sum -c -
+          curl -fL --retry 3 "https://github.com/zhlynn/zsign/releases/download/v1.1.3/zsign-android-arm64-v8a.tar.gz" -o /tmp/zsign-arm64.tar.gz
+          echo "f042e585ce3cf93fef67efcdd3d139114948b12858877847fe67328d26e87cb0  /tmp/zsign-arm64.tar.gz" | sha256sum -c -
           tar -xzf /tmp/zsign-arm64.tar.gz -C app/src/main/assets/zsign/arm64-v8a
-          curl -fL --retry 3 "https://github.com/zhlynn/zsign/releases/download/v1.1.2/zsign-android-armeabi-v7a.tar.gz" -o /tmp/zsign-armv7.tar.gz
-          echo "d4fca4c5aff6069054873ab11622af3d009aa5b1e9cc19a0f10e24ace6f14b81  /tmp/zsign-armv7.tar.gz" | sha256sum -c -
+          curl -fL --retry 3 "https://github.com/zhlynn/zsign/releases/download/v1.1.3/zsign-android-armeabi-v7a.tar.gz" -o /tmp/zsign-armv7.tar.gz
+          echo "3994068f4d3d1bb3157f98ed987373155510c0b327fc8b4b8395692b9ee83733  /tmp/zsign-armv7.tar.gz" | sha256sum -c -
           tar -xzf /tmp/zsign-armv7.tar.gz -C app/src/main/assets/zsign/armeabi-v7a
           chmod 755 app/src/main/assets/zsign/arm64-v8a/zsign app/src/main/assets/zsign/armeabi-v7a/zsign
           file app/src/main/assets/zsign/arm64-v8a/zsign
