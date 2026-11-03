@@ -36,22 +36,22 @@ class AppleSigningGuideActivity : Activity() {
             addView(page)
         }
         page.addView(text("BO SIDELOAD • APPLE SIGNING", 13, blue, true), full())
-        page.addView(text("Trung tâm Apple ID miễn phí", 25, white, true).apply {
+        page.addView(text("Trung tâm Apple Signing", 25, white, true).apply {
             gravity = Gravity.CENTER
             setPadding(0, dp(10), 0, dp(14))
         }, full())
         page.addView(text(
-            "Chế độ hiện tại: Personal Team. Bo Sideload không đăng nhập Apple ID thay bạn và không tự tạo chứng chỉ Apple. Hãy dùng Xcode trên máy Mac của chính bạn để Apple tạo certificate/profile hợp lệ.",
+            "Hỗ trợ cả Apple ID miễn phí (Personal Team) và tài khoản Apple Developer Program trả phí. Bo Sideload không đăng nhập Apple ID thay bạn và không tự tạo chứng chỉ Apple; ứng dụng dùng certificate P12 và provisioning profile hợp lệ do Apple/Xcode cấp. Chọn bộ hồ sơ phù hợp với tài khoản và mục đích cài đặt của bạn.",
             14, muted, false
         ), full())
-        page.addView(section("iPhone / iPad", "Có thể phát triển và thử ứng dụng cá nhân qua Xcode Personal Team. Giới hạn Apple công bố: tối đa 10 App ID và 3 thiết bị; App ID và profile hết hạn sau 7 ngày; tối đa 3 ứng dụng trên mỗi thiết bị. Sau khi hết hạn phải ký và cài lại."), full())
-        page.addView(section("MacBook / macOS", "Apple ID miễn phí không cấp Developer ID Application/Installer và không mở quyền notarization. Bo Sideload hiện chỉ có thể kiểm tra tệp/gói và hướng dẫn; không thể ký hoặc notarize bản macOS để phân phối rộng rãi."), full())
-        page.addView(section("Apple TV / tvOS", "Ứng dụng tvOS cần build bằng Xcode, chữ ký và provisioning profile dành riêng cho tvOS. Không dùng chứng chỉ iOS tùy ý để ký tvOS. Hỗ trợ Personal Team phụ thuộc Xcode, phiên bản tvOS và thiết bị; Bo Sideload chưa thể tự cấp profile hoặc cài trực tiếp."), full())
+        page.addView(section("Apple ID miễn phí • iPhone / iPad", "Dùng Personal Team do Xcode tạo để phát triển và thử ứng dụng cá nhân. Apple giới hạn tối đa 10 App ID, 3 thiết bị và 3 ứng dụng trên mỗi thiết bị; App ID, thiết bị đăng ký và provisioning profile có thời hạn 7 ngày. Khi profile hết hạn, cần tạo lại hồ sơ, ký và cài lại."), full())\n        page.addView(section("Apple Developer trả phí • iPhone / iPad", "ĐƯỢC HỖ TRỢ. Dùng Apple Development + Development provisioning profile để thử trên thiết bị đã đăng ký; hoặc dùng Apple Distribution + Ad Hoc profile cho phân phối thử nghiệm tới các UDID đã đăng ký. Tài khoản phải còn hiệu lực và có quyền Certificates, Identifiers & Profiles phù hợp. Bo Sideload kiểm tra sự khớp giữa IPA, P12, Team ID, Bundle ID, thiết bị và profile trước khi ký. Không chọn App Store profile để sideload trực tiếp; TestFlight/App Store là luồng phân phối riêng."), full())
+        page.addView(section("MacBook / macOS", "Với tài khoản trả phí, có thể dùng Mac Development để thử trên máy đã đăng ký; Mac App Distribution để phân phối qua Mac App Store; hoặc Developer ID Application để ký ứng dụng macOS phân phối ngoài App Store (thường cần notarization). Apple ID miễn phí không cấp các chứng chỉ phân phối này. Bo Sideload hiện chỉ kiểm tra metadata; chưa thay thế quy trình ký/notarize macOS của Xcode."), full())
+        page.addView(section("Apple TV / tvOS", "Ứng dụng tvOS cần certificate và provisioning profile dành riêng cho tvOS; không dùng profile iOS để ký tvOS. Tài khoản trả phí có thể tạo hồ sơ Development hoặc phân phối tvOS theo quyền của team và phương thức Apple hỗ trợ. Personal Team miễn phí có giới hạn hơn và phụ thuộc Xcode/thiết bị. Bo Sideload hiện chưa tự tạo profile tvOS hoặc xác nhận cài đặt trực tiếp trên Apple TV."), full())
         page.addView(text("NHẬP HỒ SƠ ĐỂ KIỂM TRA", 17, white, true).apply {
             setPadding(0, dp(24), 0, dp(8))
         }, full())
         page.addView(text(
-            "Chọn tệp provisioning profile (.mobileprovision / .provisionprofile) hoặc chứng chỉ công khai (.cer). Bo Sideload có thể giải mã phần CMS/plist để đọc metadata, nhưng chưa xác minh chữ ký CMS hoặc chuỗi tin cậy Apple.",
+            "Đối với ký IPA trên Android, chọn P12 có private key và provisioning profile tương ứng. Cả certificate/profile Personal Team miễn phí lẫn Apple Developer trả phí đều có thể dùng nếu đúng loại, còn hạn và khớp Bundle ID, Team ID, certificate, nền tảng và UDID. Profile/certificate công khai chỉ dùng để kiểm tra metadata; không thay thế P12 có private key. Bo Sideload có thể đọc metadata nhưng chưa xác minh đầy đủ chữ ký CMS hoặc chuỗi tin cậy Apple.",
             13, muted, false
         ), full())
         page.addView(Button(this).apply {
@@ -65,7 +65,7 @@ class AppleSigningGuideActivity : Activity() {
         }
         page.addView(importedFileInfo, full())
         page.addView(text(
-            "BẢO MẬT: Không gửi Apple ID, mật khẩu, mã xác minh hai yếu tố hoặc khóa riêng P12 vào cuộc trò chuyện. Không dùng certificate/profile của người khác. Bo Sideload không lưu mật khẩu Apple ID.",
+            "LƯU Ý: Bo Sideload không phân biệt theo việc tài khoản đã trả phí hay chưa bằng cách hỏi mật khẩu. Ứng dụng kiểm tra chính bộ P12/profile được nhập. Không gửi Apple ID, mật khẩu, mã xác minh hai yếu tố hoặc P12 cho người khác; không dùng certificate/profile của người khác. Mật khẩu P12 chỉ nhập cục bộ khi ký và không được lưu.",
             13, 0xFFFFD28A.toInt(), true
         ).apply { setPadding(0, dp(18), 0, dp(10)) }, full())
         page.addView(Button(this).apply {
