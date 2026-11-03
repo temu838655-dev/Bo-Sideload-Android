@@ -456,8 +456,9 @@ class DeviceConnectionActivity : Activity() {
                     deviceId = usbmuxDeviceId,
                     devicePort = UsbMuxConnectSession.LOCKDOWN_PORT
                 )
-                val systemBuid = PairingIdentityStore(this).getOrCreateSystemBuid()
-                val hostId = java.util.UUID.randomUUID().toString().uppercase(java.util.Locale.ROOT)
+                val identityStore = PairingIdentityStore(this)
+                val systemBuid = identityStore.getOrCreateSystemBuid()
+                val hostId = identityStore.getOrCreateHostId()
                 val store = EncryptedPairRecordStore(this)
                 connect.use { session ->
                     LockdownSessionChannel(session.inputStream, session.outputStream).use { channel ->
