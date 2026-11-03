@@ -16,7 +16,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 
-/** USB diagnostics only; does not claim to complete Apple pairing or IPA install. */
+/** USB discovery and ordinary Apple Lockdown pairing. IPA installation is not yet wired to this screen. */
 class DeviceConnectionActivity : Activity() {
     private lateinit var usbManager: UsbManager
     private lateinit var status: TextView
@@ -105,7 +105,7 @@ class DeviceConnectionActivity : Activity() {
             setOnClickListener { shareDiagnosticReport() }
         })
         root.addView(TextView(this).apply {
-            text = "Giới hạn: màn hình này dò USB và xin quyền Android. Đã có thử nghiệm phiên usbmux Listen ở mức nền tảng. Chưa có ghép đôi Apple Lockdown hoặc cài IPA. Thấy USB không có nghĩa là iPhone đã kết nối tin cậy."
+            text = "Màn hình này dò USB, theo dõi usbmux và thực hiện ghép đôi Apple Lockdown. Sau khi ghép đôi, hồ sơ được mã hóa bằng Android Keystore. Cài IPA trực tiếp từ giao diện vẫn đang được hoàn thiện; thấy USB không đồng nghĩa cài ứng dụng đã sẵn sàng."
             textSize = 13f
             setTextColor(0xFFFFD18A.toInt())
             setPadding(0, dp(18), 0, dp(12))
@@ -135,6 +135,12 @@ class DeviceConnectionActivity : Activity() {
 
     private fun refreshDevices() {
         devicesPanel.removeAllViews()
+        attachedAppleDevice = null
+        if (attachedUsbmuxDeviceId == null) {
+            attachedDeviceSerial = null
+            pairButton.isEnabled = false
+            pairButton.text = "Ghép đôi iPhone (Lockdown)"
+        }
         val devices = usbManager.deviceList.values.toList()
         if (devices.isEmpty()) {
             status.text = "Chưa phát hiện USB. Kiểm tra cáp truyền dữ liệu, OTG và thử quét lại."
