@@ -34,7 +34,7 @@ class MainActivity : Activity() {
     private var selectedIpaUri: Uri? = null
     private var selectedIpaName: String = "BoSideload-signed.ipa"
     private var p12Uri: Uri? = null
-    private var profileUri: Uri? = null
+    private val profileUris = mutableListOf<Uri>()
     private var pendingSignedFile: File? = null
     private lateinit var store: RecentIpaStore
     private val pageColor = Color.rgb(8, 14, 27)
@@ -129,7 +129,7 @@ class MainActivity : Activity() {
         profileButton = Button(this).apply {
             text = "②  Chọn provisioning profile"
             isAllCaps = false
-            setOnClickListener { chooseCredential(PICK_PROFILE) }
+            setOnClickListener { chooseProfiles() }
         }
         page.addView(profileButton, fullWidth())
         signButton = Button(this).apply {
@@ -174,34 +174,24 @@ class MainActivity : Activity() {
     private fun restoreSavedSigningCredentials() {
         val prefs = getSharedPreferences(SIGNING_PREFS, MODE_PRIVATE)
         val savedP12 = prefs.getString(KEY_P12_URI, null)
-        val savedProfile = prefs.getString(KEY_PROFILE_URI, null)
-
-        if (!savedP12.isNullOrBlank()) {
-            val uri = runCatching { Uri.parse(savedP12) }.getOrNull()
+        val savedProfiles = prefs.getStringSet(KEY_PROFILE_URIS, null)
+            ?.toList()
+            ?: listOfNotNull(prefs.getString(KEY_PROFILE_URI, null))
+        profileUris.clear()
+        savedProfiles.forEach { raw ->
+            val uri = runCatching { Uri.parse(raw) }.getOrNull()
             val readable = uri != null && runCatching {
                 contentResolver.openInputStream(uri)?.use { it.read() >= -1 } == true
             }.getOrDefault(false)
-            if (readable && uri != null) {
-                p12Uri = uri
-                p12Button.text = "✓  Chứng chỉ đã lưu: ${displayName(uri)}"
-            } else {
-                prefs.edit().remove(KEY_P12_URI).apply()
-                p12Button.text = "①  Chọn chứng chỉ .p12"
-            }
+            if (readable && uri != null) profileUris += uri
         }
-
-        if (!savedProfile.isNullOrBlank()) {
-            val uri = runCatching { Uri.parse(savedProfile) }.getOrNull()
-            val readable = uri != null && runCatching {
-                contentResolver.openInputStream(uri)?.use { it.read() >= -1 } == true
-            }.getOrDefault(false)
-            if (readable && uri != null) {
-                profileUri = uri
-                profileButton.text = "✓  Profile đã lưu: ${displayName(uri)}"
-            } else {
-                prefs.edit().remove(KEY_PROFILE_URI).apply()
-                profileButton.text = "②  Chọn provisioning profile"
-            }
+        if (profileUris.isNotEmpty()) {
+            prefs.edit().putStringSet(KEY_PROFILE_URIS, profileUris.map { it.toString() }.toSet())
+                .remove(KEY_PROFILE_URI).apply()
+            profileButton.text = "✓  Đã chọn ${'$'}{profileUris.size} provisioning profile"
+        } else {
+            prefs.edit().remove(KEY_PROFILE_URIS).remove(KEY_PROFILE_URI).apply()
+            profileButton.text = "②  Chọn provisioning profile(s)"
         }
     }
 
@@ -214,9 +204,18 @@ class MainActivity : Activity() {
         startActivityForResult(intent, requestCode)
     }
 
+    private fun chooseProfiles() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+        }
+        startActivityForResult(intent, PICK_PROFILE)
+    }
     private fun updateSignButton() {
         if (!::signButton.isInitialized) return
-        signButton.isEnabled = selectedIpaUri != null && p12Uri != null && profileUri != null
+        signButton.isEnabled = selectedIpaUri != null && p12Uri != null && profileUris.isNotEmpty()
     }
 
     private fun showSigningPasswordDialog() {
@@ -245,7 +244,7 @@ class MainActivity : Activity() {
     private fun startSigning(password: String) {
         val ipaUri = selectedIpaUri ?: return
         val certificateUri = p12Uri ?: return
-        val provisioningUri = profileUri ?: return
+        val provisioningUris = profileUris.toList().takeIf { it.isNotEmpty() } ?: return
         signButton.isEnabled = false
         signingStatus.text = "Đang chuẩn bị tệp và chạy zsign trên thiết bị…"
         Thread {
@@ -258,7 +257,9 @@ class MainActivity : Activity() {
                 }
                 val input = copyUriToFile(ipaUri, File(workDir, "source.ipa"), MAX_IPA_BYTES)
                 val p12 = copyUriToFile(certificateUri, File(workDir, "certificate.p12"), MAX_CREDENTIAL_BYTES)
-                val profile = copyUriToFile(provisioningUri, File(workDir, "profile.mobileprovision"), MAX_CREDENTIAL_BYTES)
+                val profiles = provisioningUris.mapIndexed { index, uri ->
+                    copyUriToFile(uri, File(workDir, "profile-$index.mobileprovision"), MAX_CREDENTIAL_BYTES)
+                }
                 val output = File(cacheDir, "BoSideload-${System.currentTimeMillis()}-signed.ipa")
                 // Use only the UDID captured after a successful Lockdown pairing,
                 // where it was compared against the attached usbmux serial.
@@ -266,7 +267,7 @@ class MainActivity : Activity() {
                     DeviceConnectionActivity.VERIFIED_DEVICE_PREFS, MODE_PRIVATE
                 ).getString(DeviceConnectionActivity.KEY_LAST_VERIFIED_UDID, null)
                 val preflight = AppleSigningCompatibility.preflight(
-                    input, p12, profile, password, targetUdid = verifiedUdid
+                    input, p12, profiles, password, targetUdid = verifiedUdid
                 )
                 if (!preflight.compatible) {
                     result = ZsignEngine.SignResult(
@@ -280,7 +281,7 @@ class MainActivity : Activity() {
                         }
                     )
                 } else {
-                    result = ZsignEngine(this).sign(input, p12, profile, password, output)
+                    result = ZsignEngine(this).sign(input, p12, profiles, password, output)
                     if (result.success) signedFile = result.output
                     if (preflight.warnings.isNotEmpty()) {
                         result = result.copy(message = result.message + "\n\nKIỂM TRA TRƯỚC KHI KÝ\n" +
@@ -288,7 +289,7 @@ class MainActivity : Activity() {
                     }
                 }
                 p12.delete()
-                profile.delete()
+                profiles.forEach { it.delete() }
                 input.delete()
                 workDir.deleteRecursively()
             } catch (error: Exception) {
