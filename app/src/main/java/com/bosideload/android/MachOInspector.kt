@@ -195,7 +195,7 @@ internal object MachOInspector {
                 if (hashOffset > cdLength || codeSlots * hashSize > cdLength - hashOffset) return false
                 if (specialSlots * hashSize > hashOffset) return false
                 val fixedHeaderSize = when {
-                    version >= 0x20600L -> 108L
+                    version >= 0x20600L -> 112L
                     version >= 0x20500L -> 96L
                     version >= 0x20400L -> 88L
                     version >= 0x20300L -> 64L
