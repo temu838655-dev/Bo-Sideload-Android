@@ -111,9 +111,10 @@ internal class LockdownTlsSession private constructor(
         }
 
         private fun createSslContext(record: PairRecord): SSLContext {
-            // Lockdown StartSession authenticates this host with the paired
-            // HostCertificate/HostPrivateKey. The Root identity is reserved
-            // for service TLS handshakes (AFC / installation_proxy).
+            // Match libimobiledevice's OpenSSL Lockdown handshake: present
+            // the paired RootCertificate + RootPrivateKey as the TLS client
+            // identity. The Host identity is retained and validated in the
+            // pairing record for the ordinary Lockdown Pair protocol.
             val rootCertificate = parseCertificate(record.rootCertificate)
             val hostCertificate = parseCertificate(record.hostCertificate)
             val deviceCertificate = parseCertificate(record.deviceCertificate)
