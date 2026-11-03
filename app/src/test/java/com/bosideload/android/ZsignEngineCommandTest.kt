@@ -10,7 +10,8 @@ class ZsignEngineCommandTest {
     fun addsOneMinusMArgumentForEachProvisioningProfileInOrder() {
         val binary = File("/app/zsign")
         val input = File("/files/input.ipa")
-        val p12 = File("/files/signing.p12")
+        val privateKey = File("/files/identity-key.pem")
+        val certificate = File("/files/identity-cert.pem")
         val mainProfile = File("/files/main.mobileprovision")
         val extensionProfile = File("/files/share.mobileprovision")
         val output = File("/files/output.ipa")
@@ -18,17 +19,17 @@ class ZsignEngineCommandTest {
         val command = ZsignEngine.buildSigningCommand(
             binary,
             input,
-            p12,
+            privateKey,
+            certificate,
             listOf(mainProfile, extensionProfile),
-            "temporary-password",
             output
         )
 
         assertEquals(
             listOf(
                 "/app/zsign", "-f",
-                "-k", "/files/signing.p12",
-                "-p", "temporary-password",
+                "-k", "/files/identity-key.pem",
+                "-c", "/files/identity-cert.pem",
                 "-m", "/files/main.mobileprovision",
                 "-m", "/files/share.mobileprovision",
                 "-o", "/files/output.ipa",
@@ -44,9 +45,9 @@ class ZsignEngineCommandTest {
             ZsignEngine.buildSigningCommand(
                 File("/app/zsign"),
                 File("/files/input.ipa"),
-                File("/files/signing.p12"),
+                File("/files/identity-key.pem"),
+                File("/files/identity-cert.pem"),
                 emptyList(),
-                "temporary-password",
                 File("/files/output.ipa")
             )
         }
