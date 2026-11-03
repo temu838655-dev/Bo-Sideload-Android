@@ -142,18 +142,7 @@ internal class SideloadInstallCoordinator(
         // Best-effort cleanup: a cleanup failure must not turn a confirmed
         // Installation Proxy success into an install failure.
         val cleanupSucceeded = try {
-            val cleanupDescriptor = openLockdownSession().use { lockdown ->
-                LockdownServiceStarter.start(
-                    channel = lockdown.channel,
-                    identifier = AfcServiceConnection.AFC_SERVICE_IDENTIFIER
-                )
-            }
-            AfcServiceConnection.open(
-                transport = newTransport(),
-                deviceId = deviceId,
-                descriptor = cleanupDescriptor,
-                record = pairRecord
-            ).use { connection -> connection.client.removeStagedIpa(remotePath) }
+            removeStagedIpa(remotePath)
             true
         } catch (_: Exception) {
             false
