@@ -339,7 +339,14 @@ class AppleConnectActivity : Activity() {
     ) {
         status.text = "Đang tạo provisioning profile với Apple…"
         Thread {
-            val result = AppleProvisioningProfileManager.create(credentials, request)
+            val result = runCatching {
+                AppleProvisioningProfileManager.create(credentials, request)
+            }.getOrElse { error ->
+                AppleProvisioningProfileManager.Result(
+                    false,
+                    error.message ?: "Không thể tạo provisioning profile do dữ liệu đầu vào không hợp lệ."
+                )
+            }
             runOnUiThread {
                 if (result.ok && result.profileContent != null) {
                     pendingProfile?.fill(0)
