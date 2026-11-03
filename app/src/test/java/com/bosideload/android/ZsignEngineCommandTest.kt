@@ -1,6 +1,7 @@
 package com.bosideload.android
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
 import org.junit.Test
 import java.io.File
@@ -24,6 +25,9 @@ class ZsignEngineCommandTest {
             listOf(mainProfile, extensionProfile),
             output
         )
+
+        assertFalse("P12 password must never appear in process arguments", command.contains("-p"))
+        assertFalse("P12 password must never appear in process arguments", command.contains("temporary-password"))
 
         assertEquals(
             listOf(
