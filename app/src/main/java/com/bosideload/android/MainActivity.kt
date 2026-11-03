@@ -225,7 +225,14 @@ class MainActivity : Activity() {
                 val p12 = copyUriToFile(certificateUri, File(workDir, "certificate.p12"), MAX_CREDENTIAL_BYTES)
                 val profile = copyUriToFile(provisioningUri, File(workDir, "profile.mobileprovision"), MAX_CREDENTIAL_BYTES)
                 val output = File(cacheDir, "BoSideload-${System.currentTimeMillis()}-signed.ipa")
-                val preflight = AppleSigningCompatibility.preflight(input, p12, profile, password)
+                // Use only the UDID captured after a successful Lockdown pairing,
+                // where it was compared against the attached usbmux serial.
+                val verifiedUdid = getSharedPreferences(
+                    DeviceConnectionActivity.VERIFIED_DEVICE_PREFS, MODE_PRIVATE
+                ).getString(DeviceConnectionActivity.KEY_LAST_VERIFIED_UDID, null)
+                val preflight = AppleSigningCompatibility.preflight(
+                    input, p12, profile, password, targetUdid = verifiedUdid
+                )
                 if (!preflight.compatible) {
                     result = ZsignEngine.SignResult(
                         false,
