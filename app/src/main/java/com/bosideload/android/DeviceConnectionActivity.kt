@@ -16,7 +16,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 
-/** USB discovery and ordinary Apple Lockdown pairing. IPA installation is not yet wired to this screen. */
+/** USB discovery and ordinary Apple Lockdown pairing. IPA installation is wired to this screen but still requires real-device validation. */
 class DeviceConnectionActivity : Activity() {
     private lateinit var usbManager: UsbManager
     private lateinit var status: TextView
@@ -113,7 +113,7 @@ class DeviceConnectionActivity : Activity() {
             setOnClickListener { shareDiagnosticReport() }
         })
         root.addView(TextView(this).apply {
-            text = "Màn hình này dò USB, theo dõi usbmux và thực hiện ghép đôi Apple Lockdown. Sau khi ghép đôi, hồ sơ được mã hóa bằng Android Keystore. Cài IPA trực tiếp từ giao diện vẫn đang được hoàn thiện; thấy USB không đồng nghĩa cài ứng dụng đã sẵn sàng."
+            text = "Màn hình này dò USB, theo dõi usbmux và thực hiện ghép đôi Apple Lockdown. Sau khi ghép đôi, hồ sơ được mã hóa bằng Android Keystore. Luồng cài IPA đã được nối nhưng chưa được xác nhận trên iPhone thật; thấy USB không đồng nghĩa cài đặt chắc chắn thành công."
             textSize = 13f
             setTextColor(0xFFFFD18A.toInt())
             setPadding(0, dp(18), 0, dp(12))
