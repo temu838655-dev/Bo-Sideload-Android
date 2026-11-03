@@ -315,6 +315,9 @@ class DeviceConnectionActivity : Activity() {
             @Suppress("DEPRECATION")
             registerReceiver(permissionReceiver, filter)
         }
+        if (intent.getBooleanExtra(EXTRA_START_WIFI_SCAN, false)) {
+            wifiScanButton.performClick()
+        }
     }
 
     override fun onResume() {
@@ -713,6 +716,7 @@ class DeviceConnectionActivity : Activity() {
 
     companion object {
         const val EXTRA_SIGNED_IPA_PATH = "com.bosideload.android.extra.SIGNED_IPA_PATH"
+        const val EXTRA_START_WIFI_SCAN = "com.bosideload.android.extra.START_WIFI_SCAN"
         internal const val VERIFIED_DEVICE_PREFS = "bo_verified_iphone"
         internal const val KEY_LAST_VERIFIED_UDID = "last_verified_udid"
         private const val MAX_INSTALL_IPA_BYTES = 512L * 1024L * 1024L
