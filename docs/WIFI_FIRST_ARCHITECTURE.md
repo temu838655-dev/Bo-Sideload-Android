@@ -34,10 +34,10 @@ Bo Sideload is intended to use Wi-Fi as its primary transport. USB remains a fal
 ## Implementation order
 
 1. Replace the experimental direct-IP Lockdown pairing attempt with protocol-correct Wi-Fi-first guidance. (Done)
-2. Add a Rust JNI backend pinned to a reviewed `idevice` crate version with only required features: `remote_pairing`, `mdns`, `tcp`, `rsd`, `core_device_proxy`, `tunnel_tcp_stack`, `afc`, and `installation_proxy`.
-3. Implement Android mDNS advertisement, PIN handoff, and device-initiated RPPairing for iOS 27+.
-4. Implement paired-device discovery and auth-tag validation for Wi-Fi Sync devices.
-5. Build the RPPairing TLS-PSK/software TCP tunnel and RSD provider.
+2. Add Android NSD/mDNS discovery for the legacy `_apple-mobdev2._tcp.` Wi-Fi Sync service. (Implemented as untrusted discovery only)
+3. Match discovered services to encrypted pairing records and validate the advertised authentication tag before opening any socket.
+4. Add iOS 27+ device-initiated RPPairing host advertisement, PIN handoff, and a reviewed, pinned protocol backend.
+5. Build the authenticated RPPairing TLS-PSK/software TCP tunnel and RSD provider.
 6. Implement IPA upload/install over the services actually exposed by the connected iPhone.
 7. Add integration tests, then validate on physical iPhones across supported iOS versions and Wi-Fi routers.
 8. Promote Wi-Fi to the default screen and keep USB under “Other connection methods”.
