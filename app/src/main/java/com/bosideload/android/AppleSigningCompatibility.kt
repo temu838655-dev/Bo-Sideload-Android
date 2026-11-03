@@ -188,24 +188,6 @@ internal object AppleSigningCompatibility {
         }
         return ProfileResolution(assignments, errors)
     }
-    internal fun rejectUnsupportedNestedBundles(
-        baseCheck: Check,
-        nestedBundles: List<NestedBundleInfo>
-    ): Check {
-        if (nestedBundles.isEmpty()) return baseCheck
-        val bundleSummary = nestedBundles.joinToString("; ") { bundle ->
-            "${bundle.bundleId ?: "không đọc được Bundle ID"} (${bundle.path})"
-        }
-        val nestedError = "Không thể ký an toàn IPA này: phát hiện ${nestedBundles.size} app extension/Watch bundle: $bundleSummary. " +
-            "Giao diện hiện chỉ nhận một provisioning profile và chưa hỗ trợ chọn, đối chiếu, truyền nhiều profile -m cho từng Bundle ID. " +
-            "Để tránh tạo IPA có extension chưa được ký đúng, thao tác ký bị chặn. Hãy dùng IPA không có nested executable bundle hoặc chờ bản hỗ trợ nhiều profile."
-        return baseCheck.copy(
-            compatible = false,
-            errors = baseCheck.errors + nestedError,
-            warnings = baseCheck.warnings
-        )
-    }
-
     private fun readIpaMetadata(file: java.io.File): IpaPlistReader.Metadata? {
         require(file.isFile && file.length() > 0L) { "IPA không tồn tại hoặc rỗng." }
         java.util.zip.ZipInputStream(file.inputStream().buffered()).use { zip ->
