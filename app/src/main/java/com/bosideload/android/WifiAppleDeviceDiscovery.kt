@@ -57,10 +57,8 @@ internal class WifiAppleDeviceDiscovery(
             try {
                 nsdManager.resolveService(serviceInfo, object : NsdManager.ResolveListener {
                     override fun onResolveFailed(info: NsdServiceInfo, errorCode: Int) {
-                        resolvingTokens.remove(info.serviceName, token)
-                        if (!closed && resolvingTokens[info.serviceName] == token) {
-                            listener.onStatus("Không phân giải được dịch vụ mDNS: $errorCode")
-                        } else if (!closed) {
+                        val isCurrentAttempt = resolvingTokens.remove(info.serviceName, token)
+                        if (!closed && isCurrentAttempt) {
                             listener.onStatus("Không phân giải được dịch vụ mDNS: $errorCode")
                         }
                     }
