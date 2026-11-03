@@ -155,6 +155,13 @@ internal object ApplePairingMaterialGenerator {
             publicKey
         )
         builder.addExtension(Extension.basicConstraints, true, BasicConstraints(isCa))
+        if (isCa) {
+            builder.addExtension(
+                Extension.keyUsage,
+                true,
+                KeyUsage(KeyUsage.keyCertSign or KeyUsage.cRLSign)
+            )
+        }
         if (includeKeyUsage) {
             builder.addExtension(
                 Extension.keyUsage,
