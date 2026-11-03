@@ -45,6 +45,25 @@ class AppleSigningCompatibilityTest {
     }
 
     @Test
+    fun recognizesNestedExtensionAndWatchBundleInfoPlistsForPreflightWarnings() {
+        assertTrue(AppleSigningCompatibility.isNestedCodeBundleInfoPlistPath(
+            "Payload/Example.app/PlugIns/Share.appex/Info.plist"
+        ))
+        assertTrue(AppleSigningCompatibility.isNestedCodeBundleInfoPlistPath(
+            "Payload/Example.app/Watch/ExampleWatch.app/Info.plist"
+        ))
+        assertFalse(AppleSigningCompatibility.isNestedCodeBundleInfoPlistPath(
+            "Payload/Example.app/Info.plist"
+        ))
+        assertFalse(AppleSigningCompatibility.isNestedCodeBundleInfoPlistPath(
+            "Payload/Example.app/PlugIns/../Info.plist"
+        ))
+        assertFalse(AppleSigningCompatibility.isNestedCodeBundleInfoPlistPath(
+            "Payload/Example.app/Resources/Info.plist"
+        ))
+    }
+
+    @Test
     fun profileApplicationIdentifierMustUseKnownTeamPrefix() {
         assertTrue(AppleSigningCompatibility.hasKnownProfilePrefix(
             "ABCDE12345.com.example.app",
