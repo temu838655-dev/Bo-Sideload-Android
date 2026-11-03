@@ -6,8 +6,8 @@ import java.io.Closeable
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * Background listener for usbmux device attach/detach notifications. A 30-second
- * read timeout ends the session; it never retries a partially consumed packet.
+ * Background listener for usbmux device attach/detach notifications. USB reads
+ * wait until an event arrives; close() releases the USB connection to stop the wait.
  * A successful Listen acknowledgement is not a Lockdown pairing.
  */
 internal class UsbMuxDeviceMonitor(
@@ -40,7 +40,7 @@ internal class UsbMuxDeviceMonitor(
     private fun runMonitor() {
         try {
             listener.onStatus("Đang mở giao diện USBMux của Apple…")
-            val transport = AndroidUsbMuxTransport.open(usbManager, device, timeoutMs = 30_000)
+            val transport = AndroidUsbMuxTransport.open(usbManager, device, timeoutMs = 0)
             val activeSession = UsbMuxListenSession(transport)
             session = activeSession
             activeSession.start()
