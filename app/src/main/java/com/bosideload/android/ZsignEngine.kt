@@ -104,6 +104,70 @@ internal class ZsignEngine(private val context: Context) {
         }
     }
 
+    private data class CertificateCheck(val valid: Boolean, val message: String)
+
+    /**
+     * Ask zsign's own certificate checker to inspect the signed IPA and query
+     * Apple's OCSP endpoint when network access is available. Structural
+     * verification remains separate and is not represented as CMS verification.
+     */
+    private fun checkSignedCertificate(binary: File, ipa: File): CertificateCheck {
+        val process = try {
+            ProcessBuilder(binary.absolutePath, "-C", ipa.absolutePath)
+                .directory(context.cacheDir)
+                .redirectErrorStream(true)
+                .start()
+        } catch (error: Exception) {
+            return CertificateCheck(false,
+                "Không khởi chạy được kiểm tra zsign -C: ${error.message ?: "lỗi"}")
+        }
+        val output = StringBuilder()
+        val reader = Thread {
+            process.inputStream.bufferedReader().useLines { lines ->
+                lines.forEach { line ->
+                    synchronized(output) {
+                        if (output.length < MAX_CERT_CHECK_LOG_CHARS) {
+                            output.append(line).append('\\n')
+                        }
+                    }
+                }
+            }
+        }
+        reader.start()
+        val finished = try {
+            process.waitFor(CERT_CHECK_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        } catch (error: InterruptedException) {
+            Thread.currentThread().interrupt()
+            false
+        }
+        if (!finished) {
+            process.destroyForcibly()
+            runCatching { process.inputStream.close() }
+            runCatching { reader.join(1500) }
+            return CertificateCheck(false, "Kiểm tra certificate quá thời gian chờ.")
+        }
+        runCatching { reader.join(2000) }
+        val text = synchronized(output) { output.toString().trim() }
+        val signed = Regex("Signed\\s*:\\s*Yes", RegexOption.IGNORE_CASE).containsMatchIn(text)
+        val revoked = Regex("OCSP\\s*:\\s*Revoked", RegexOption.IGNORE_CASE).containsMatchIn(text)
+        val invalid = Regex("(certificate|cert)\\s*:\\s*(invalid|expired|revoked)", RegexOption.IGNORE_CASE)
+            .containsMatchIn(text)
+        if (process.exitValue() != 0 || !signed || revoked || invalid) {
+            return CertificateCheck(false,
+                "zsign -C không xác nhận certificate hợp lệ (exit ${process.exitValue()}).\\n" +
+                    text.takeLast(2500))
+        }
+        val ocspValid = Regex("OCSP\\s*:\\s*Valid", RegexOption.IGNORE_CASE).containsMatchIn(text)
+        val ocspUnknown = Regex("OCSP\\s*:\\s*(unknown|unavailable|error|not checked)", RegexOption.IGNORE_CASE)
+            .containsMatchIn(text)
+        val note = when {
+            ocspValid -> "Certificate được zsign nhận diện và OCSP báo Valid."
+            ocspUnknown -> "Certificate được zsign nhận diện; OCSP chưa xác minh được."
+            else -> "Certificate được zsign nhận diện; không có kết quả OCSP rõ ràng."
+        }
+        return CertificateCheck(true, note + "\\n" + text.takeLast(1800))
+    }
+
     fun engineVersion(): String {
         return try {
             val binary = installEngine()
@@ -166,5 +230,7 @@ internal class ZsignEngine(private val context: Context) {
         const val MAX_LOG_CHARS = 32_000
         const val VERSION_TIMEOUT_SECONDS = 15L
         const val MAX_VERSION_OUTPUT_CHARS = 4_000
+        const val CERT_CHECK_TIMEOUT_SECONDS = 90L
+        const val MAX_CERT_CHECK_LOG_CHARS = 12_000
     }
 }
