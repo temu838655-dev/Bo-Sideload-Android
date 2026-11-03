@@ -17,6 +17,7 @@ class AfcClientTest {
             write(response(1, 0x0E, ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).putLong(handle).array()))
             write(response(2, 0x01, status(0)))
             write(response(3, 0x01, status(0)))
+            write(response(4, 0x01, status(0)))
         }
         val requests = ByteArrayOutputStream()
         val source = byteArrayOf(10, 20, 30, 40)
@@ -63,6 +64,7 @@ class AfcClientTest {
         val responses = ByteArrayOutputStream().apply {
             write(response(1, 0x0E, ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).putLong(9L).array()))
             write(response(2, 0x01, status(0)))
+            write(response(3, 0x01, status(0)))
         }
         val requests = ByteArrayOutputStream()
         val error = assertThrows(IOException::class.java) {
