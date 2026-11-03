@@ -28,8 +28,16 @@ class DeviceConnectionActivity : Activity() {
     private val permissionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == permissionAction) {
+                val requestedId = pendingPermissionDeviceId ?: return
+                val resultDevice: UsbDevice? = if (Build.VERSION.SDK_INT >= 33) {
+                    intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+                } else {
+                    @Suppress("DEPRECATION")
+                    intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+                }
+                // Ignore stale or unrelated permission broadcasts.
+                if (resultDevice != null && resultDevice.deviceId != requestedId) return
                 val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
-                val requestedId = pendingPermissionDeviceId
                 pendingPermissionDeviceId = null
                 refreshDevices()
                 if (!granted && requestedId != null) {
