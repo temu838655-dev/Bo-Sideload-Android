@@ -51,21 +51,21 @@ This remains a serialization layer only. It does not send a Lockdown request, au
 
 `UsbMuxPlistRequests` now builds protocol-v1 plist packets for `Listen` and `Connect`, including client metadata fields used by libusbmuxd. Connect validates the device ID and TCP port and applies the required `htons`-style byte swap to `PortNumber`. Unit tests decode the generated plist payloads and verify the packet message type and tag.
 
-This still does not open the Android USB interface, parse usbmux responses/device attach events, or connect to a device port. The request builders must be integrated with a real Android USB Host transport and tested against physical iPhones before the connection UI can be considered functional.
+At the time this section was first written, the request builders were not integrated with USB. The subsequent transport and monitor groundwork below now sends Listen and parses replies, but no physical-device validation has been completed.
 
 
 ### usbmux response parsing groundwork
 
 `UsbMuxResponseParser` now validates plist packet message type and parses `Result`, `Attached`, and `Detached` messages. Attached-device metadata is read from the Properties dictionary with optional serial number, connection type, and product ID. Unknown message types are preserved rather than treated as successful connections. Unit tests cover success, attach/detach, unknown messages, optional metadata, and malformed responses.
 
-This parser is not yet connected to a live USB stream. The next gate is Android USB bulk endpoint I/O with permission/lifecycle handling, then a physical-device test of Listen events. Do not treat a parsed Attached message as proof of Lockdown pairing or installation capability.
+The parser is now used by the USB Listen monitor described below. A parsed Attached message is not proof of Lockdown pairing or installation capability.
 
 
 ### Android USB bulk transport groundwork
 
-`AndroidUsbMuxTransport` now checks Android's USB permission, locates Apple's USBMux vendor-specific interface (class FF/subclass FE/protocol 02), claims it, and reads/writes complete usbmux packets over bulk IN/OUT endpoints with bounded packet lengths and a finite I/O timeout. `UsbMuxListenSession` sends the Listen plist request and exposes parsed responses/events from the transport. The caller must close the session to release the claimed interface and USB connection.
+`AndroidUsbMuxTransport` now checks Android's USB permission, locates Apple's USBMux vendor-specific interface (class FF/subclass FE/protocol 02), claims it, and reads/writes complete usbmux packets over bulk IN/OUT endpoints with bounded packet lengths and a finite I/O timeout. `UsbMuxListenSession` sends the Listen plist request and exposes parsed responses/events from the transport. The device diagnostics screen now offers an explicit “Thử kết nối usbmux” action after Android USB permission is granted. The listener runs off the UI thread, handles Listen Result and attach/detach events, and closes the USB connection when stopped. Bulk I/O is chunked to 16 KiB for compatibility with older Android USB Host implementations; a 30-second read timeout ends the monitor rather than retrying a partially consumed packet.
 
-This code has only been compile-checked by GitHub Actions; no physical iPhone/Android OTG test has been performed. USB interface descriptors can vary by device/OS and the transport may need device-specific handling. No UI currently starts this session, and a successful USB bulk exchange is not equivalent to a trusted Lockdown pairing.
+The code has only been compile-checked by GitHub Actions; no physical iPhone/Android OTG test has been performed. USB interface descriptors can vary by device/OS and the transport may need device-specific handling. A successful USB bulk exchange or Listen acknowledgement is not equivalent to a trusted Lockdown pairing.
 
 
 Descriptor matching was checked against the upstream usbmuxd interface definitions: class 255 (0xFF), subclass 254 (0xFE), protocol 2 (0x02). See [upstream usb.h](https://github.com/libimobiledevice/usbmuxd/blob/master/src/usb.h) and [USB discovery implementation](https://github.com/libimobiledevice/usbmuxd/blob/master/src/usb.c). The Android adapter uses exact matching rather than the permissive OR condition found in an older upstream discovery path.
