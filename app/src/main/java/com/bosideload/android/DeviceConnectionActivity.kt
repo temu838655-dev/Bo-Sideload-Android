@@ -346,33 +346,43 @@ class DeviceConnectionActivity : Activity() {
             try {
                 val record = EncryptedPairRecordStore(this).load(serial)
                     ?: throw IllegalStateException("iPhone chưa có hồ sơ ghép đôi. Hãy ghép đôi trước.")
-                val transport = AndroidUsbMuxTransport.open(usbManager, usbDevice)
-                val connect = UsbMuxConnectSession.connect(
-                    transport = transport,
+                val coordinator = SideloadInstallCoordinator(
+                    openLockdownSession = {
+                        val transport = AndroidUsbMuxTransport.open(
+                            usbManager,
+                            usbDevice,
+                            timeoutMs = SERVICE_IO_TIMEOUT_MS
+                        )
+                        val connect = UsbMuxConnectSession.connect(
+                            transport = transport,
+                            deviceId = usbmuxDeviceId,
+                            devicePort = UsbMuxConnectSession.LOCKDOWN_PORT
+                        )
+                        LockdownTlsSession.start(connect, record)
+                    },
                     deviceId = usbmuxDeviceId,
-                    devicePort = UsbMuxConnectSession.LOCKDOWN_PORT
+                    pairRecord = record,
+                    newTransport = {
+                        AndroidUsbMuxTransport.open(
+                            usbManager,
+                            usbDevice,
+                            timeoutMs = SERVICE_IO_TIMEOUT_MS
+                        )
+                    }
                 )
-                LockdownTlsSession.start(connect, record).use { lockdown ->
-                    val coordinator = SideloadInstallCoordinator(
-                        lockdownChannel = lockdown.channel,
-                        deviceId = usbmuxDeviceId,
-                        pairRecord = record,
-                        newTransport = { AndroidUsbMuxTransport.open(usbManager, usbDevice, timeoutMs = SERVICE_IO_TIMEOUT_MS) }
-                    )
-                    ipaFile.inputStream().use { input ->
-                        coordinator.install(
-                            ipaInput = input,
-                            ipaSizeBytes = ipaFile.length()
-                        ) { progress ->
-                            runOnUiThread {
-                                status.text = when (progress.stage) {
-                                    SideloadInstallCoordinator.Stage.UPLOADING_IPA ->
-                                        "Đang tải IPA lên iPhone: ${progress.bytesTransferred ?: 0} / ${progress.totalBytes ?: 0} byte"
-                                    SideloadInstallCoordinator.Stage.INSTALLING_APP ->
-                                        "Đang cài ứng dụng: ${progress.installPercent ?: 0}% — ${progress.message}"
-                                    SideloadInstallCoordinator.Stage.COMPLETE ->
-                                        progress.message
-                                }
+                ipaFile.inputStream().use { input ->
+                    coordinator.install(
+                        ipaInput = input,
+                        ipaSizeBytes = ipaFile.length()
+                    ) { progress ->
+                        runOnUiThread {
+                            status.text = when (progress.stage) {
+                                SideloadInstallCoordinator.Stage.UPLOADING_IPA ->
+                                    "Đang tải IPA lên iPhone: ${progress.bytesTransferred ?: 0} / ${progress.totalBytes ?: 0} byte"
+                                SideloadInstallCoordinator.Stage.INSTALLING_APP ->
+                                    "Đang cài ứng dụng: ${progress.installPercent ?: 0}% — ${progress.message}"
+                                SideloadInstallCoordinator.Stage.COMPLETE ->
+                                    progress.message
                             }
                         }
                     }
