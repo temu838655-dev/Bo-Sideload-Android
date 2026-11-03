@@ -88,6 +88,7 @@ internal class WifiAppleDeviceDiscovery(
 
         override fun onDiscoveryStopped(serviceType: String) {
             discoveryStarted = false
+            releaseMulticastLock()
             if (!closed) listener.onStatus("Đã dừng quét Wi-Fi.")
         }
 
@@ -99,7 +100,11 @@ internal class WifiAppleDeviceDiscovery(
         }
 
         override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {
+            // NSD may fail to stop asynchronously; do not retain the Wi-Fi multicast lock.
+            discoveryStarted = false
+            releaseMulticastLock()
             runCatching { nsdManager.stopServiceDiscovery(this) }
+            if (!closed) listener.onStatus("Không dừng được quét mDNS sạch sẽ (mã $errorCode); đã nhả khóa Wi-Fi.")
         }
     }
 
@@ -117,11 +122,15 @@ internal class WifiAppleDeviceDiscovery(
         }
     }
 
+    private fun releaseMulticastLock() {
+        if (multicastLock.isHeld) runCatching { multicastLock.release() }
+    }
+
     @Synchronized
     fun stop() {
         if (discoveryStarted) runCatching { nsdManager.stopServiceDiscovery(discoveryListener) }
         discoveryStarted = false
-        if (multicastLock.isHeld) multicastLock.release()
+        releaseMulticastLock()
     }
 
     override fun close() {
