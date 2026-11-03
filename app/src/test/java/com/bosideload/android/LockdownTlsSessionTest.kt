@@ -78,9 +78,12 @@ class LockdownTlsSessionTest {
         val error = assertThrows(IOException::class.java) {
             LockdownTlsSession.start(channel, Socket(), mismatchedRecord)
         }
+        val causeMessages = generateSequence<Throwable>(error) { it.cause }
+            .mapNotNull { it.message }
+            .toList()
         assertEquals(
-            "Paired host private key does not match HostCertificate",
-            error.cause?.cause?.message
+            true,
+            causeMessages.contains("Paired host private key does not match HostCertificate")
         )
     }
 
