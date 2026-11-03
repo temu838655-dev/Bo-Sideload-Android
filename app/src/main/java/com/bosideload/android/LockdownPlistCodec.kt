@@ -40,13 +40,14 @@ internal object LockdownPlistCodec {
             isNamespaceAware = false
             isXIncludeAware = false
             isExpandEntityReferences = false
-            setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+            setFeature("http://apache.org/xml/features/disallow-doctype-decl", false)
             setFeature("http://xml.org/sax/features/external-general-entities", false)
             setFeature("http://xml.org/sax/features/external-parameter-entities", false)
             setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false)
             setFeature(javax.xml.XMLConstants.FEATURE_SECURE_PROCESSING, true)
         }
-        val document = factory.newDocumentBuilder().parse(InputSource(ByteArrayInputStream(bytes)))
+        val builder = factory.newDocumentBuilder().apply { setEntityResolver { _, _ -> InputSource(java.io.StringReader("")) } }
+        val document = builder.parse(InputSource(ByteArrayInputStream(bytes)))
         val root = document.documentElement
         require(root.tagName == "plist") { "root element is not plist" }
         val values = root.childElements()
