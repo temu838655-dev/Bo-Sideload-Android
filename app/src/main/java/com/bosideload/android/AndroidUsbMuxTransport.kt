@@ -95,10 +95,14 @@ internal class AndroidUsbMuxTransport private constructor(
         }
         if (length == 0) return 0
         val chunk = minOf(MAX_BULK_TRANSFER_BYTES, length)
-        val count = connection.bulkTransfer(input, target, offset, chunk, timeoutMs)
-        if (count < 0) throw IOException("USB raw bulk IN failed or timed out (result=$count)")
-        if (count == 0) throw IOException("USB raw bulk IN returned no data")
-        return count
+        while (true) {
+            val count = connection.bulkTransfer(input, target, offset, chunk, timeoutMs)
+            if (count < 0) throw IOException("USB raw bulk IN failed or timed out (result=$count)")
+            // A USB zero-length packet is a valid transfer boundary, not EOF.
+            // Ignore it and continue waiting for actual service-stream bytes.
+            if (count == 0) continue
+            return count
+        }
     }
 
     private fun readFully(target: ByteArray) {
@@ -110,7 +114,8 @@ internal class AndroidUsbMuxTransport private constructor(
                 input, target, offset, length, timeoutMs
             )
             if (count < 0) throw EOFException("USB bulk IN failed or timed out (result=$count)")
-            if (count == 0) throw EOFException("USB bulk IN returned no data")
+            // Zero-length USB packets do not contribute bytes to the usbmux frame.
+            if (count == 0) continue
             offset += count
         }
     }
