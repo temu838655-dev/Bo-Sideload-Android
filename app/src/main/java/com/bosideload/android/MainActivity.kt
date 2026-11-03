@@ -385,9 +385,38 @@ class MainActivity : Activity() {
             }
             return
         }
+        if (requestCode == PICK_PROFILE) {
+            val selected = mutableListOf<Uri>()
+            val clip = data?.clipData
+            if (clip != null) {
+                for (index in 0 until clip.itemCount) {
+                    clip.getItemAt(index).uri?.let { selected += it }
+                }
+            } else {
+                data?.data?.let { selected += it }
+            }
+            if (selected.isEmpty()) return
+            selected.forEach { selectedUri ->
+                try {
+                    contentResolver.takePersistableUriPermission(
+                        selectedUri, data?.flags?.and(Intent.FLAG_GRANT_READ_URI_PERMISSION) ?: 0
+                    )
+                } catch (_: Exception) {
+                    // The provider may grant temporary access only.
+                }
+            }
+            profileUris.clear()
+            profileUris.addAll(selected.distinct())
+            getSharedPreferences(SIGNING_PREFS, MODE_PRIVATE).edit()
+                .putStringSet(KEY_PROFILE_URIS, profileUris.map { it.toString() }.toSet())
+                .remove(KEY_PROFILE_URI).apply()
+            profileButton.text = "✓  Đã chọn ${'$'}{profileUris.size} provisioning profile"
+            updateSignButton()
+            return
+        }
         val uri = data?.data ?: return
         when (requestCode) {
-            PICK_FILE, PICK_P12, PICK_PROFILE -> {
+            PICK_FILE, PICK_P12 -> {
                 try {
                     contentResolver.takePersistableUriPermission(uri, data.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 } catch (_: Exception) {
@@ -399,14 +428,7 @@ class MainActivity : Activity() {
                         p12Uri = uri
                         getSharedPreferences(SIGNING_PREFS, MODE_PRIVATE).edit()
                             .putString(KEY_P12_URI, uri.toString()).apply()
-                        p12Button.text = "✓  Chứng chỉ đã lưu: ${displayName(uri)}"
-                        updateSignButton()
-                    }
-                    PICK_PROFILE -> {
-                        profileUri = uri
-                        getSharedPreferences(SIGNING_PREFS, MODE_PRIVATE).edit()
-                            .putString(KEY_PROFILE_URI, uri.toString()).apply()
-                        profileButton.text = "✓  Profile đã lưu: ${displayName(uri)}"
+                        p12Button.text = "✓  Chứng chỉ đã lưu: ${'$'}{displayName(uri)}"
                         updateSignButton()
                     }
                 }
@@ -582,6 +604,7 @@ class MainActivity : Activity() {
         private const val SIGNING_PREFS = "bo_sideload_signing_credentials"
         private const val KEY_P12_URI = "saved_p12_uri"
         private const val KEY_PROFILE_URI = "saved_profile_uri"
+        private const val KEY_PROFILE_URIS = "saved_profile_uris"
         private const val MAX_IPA_BYTES = 512L * 1024L * 1024L
         private const val MAX_CREDENTIAL_BYTES = 20L * 1024L * 1024L
     }
