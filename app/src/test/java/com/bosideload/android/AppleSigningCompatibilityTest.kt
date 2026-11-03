@@ -1,5 +1,6 @@
 package com.bosideload.android
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -126,6 +127,65 @@ class AppleSigningCompatibilityTest {
         assertTrue(result.errors.isEmpty())
     }
 
+    @Test
+    fun assignsDistinctProfilesToMainAppAndExtensionByBundleId() {
+        val profiles = listOf(
+            testProfile("ABCDE12345.com.example.app"),
+            testProfile("ABCDE12345.com.example.app.share")
+        )
+
+        val result = AppleSigningCompatibility.resolveProfileAssignments(
+            listOf("com.example.app", "com.example.app.share"), profiles
+        )
+
+        assertTrue(result.errors.isEmpty())
+        assertEquals(listOf(0, 1), result.assignments.map { it.profileIndex })
+    }
+
+    @Test
+    fun rejectsMissingOrAmbiguousProfileAssignments() {
+        val missing = AppleSigningCompatibility.resolveProfileAssignments(
+            listOf("com.example.app", "com.example.app.share"),
+            listOf(testProfile("ABCDE12345.com.example.app"))
+        )
+        assertTrue(missing.errors.any { it.contains("com.example.app.share") })
+
+        val ambiguous = AppleSigningCompatibility.resolveProfileAssignments(
+            listOf("com.example.app"),
+            listOf(
+                testProfile("ABCDE12345.com.example.app"),
+                testProfile("ABCDE12345.com.example.*")
+            )
+        )
+        assertTrue(ambiguous.errors.any { it.contains("nhiều provisioning profile") })
+    }
+
+    @Test
+    fun oneWildcardProfileCanCoverSeveralBundlesWithoutDuplicatingIt() {
+        val result = AppleSigningCompatibility.resolveProfileAssignments(
+            listOf("com.example.app", "com.example.app.share"),
+            listOf(testProfile("ABCDE12345.com.example.*"))
+        )
+
+        assertTrue(result.errors.isEmpty())
+        assertEquals(listOf(0, 0), result.assignments.map { it.profileIndex })
+    }
+
+    private fun testProfile(applicationId: String) = AppleProvisioningProfileReader.ProfileInfo(
+        name = "Test",
+        uuid = "UUID",
+        teamIdentifiers = listOf("ABCDE12345"),
+        applicationIdentifierPrefixes = listOf("ABCDE12345"),
+        bundleIdentifier = applicationId.substringAfter('.', applicationId),
+        teamBundleIdentifier = applicationId,
+        platforms = listOf("iOS"),
+        provisionedDevices = listOf("DEVICE"),
+        provisionsAllDevices = false,
+        creationDate = java.util.Date(0L),
+        expirationDate = java.util.Date(100_000L),
+        developerCertificateCount = 1,
+        developerCertificateSha256 = listOf("AA:BB")
+    )
     @Test
     fun profileApplicationIdentifierMustUseKnownTeamPrefix() {
         assertTrue(AppleSigningCompatibility.hasKnownProfilePrefix(
