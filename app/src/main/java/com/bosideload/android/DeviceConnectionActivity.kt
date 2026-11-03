@@ -28,6 +28,7 @@ class DeviceConnectionActivity : Activity() {
     @Volatile private var activeWifiLockdownSession: LockdownTlsSession? = null
     @Volatile private var activeWifiLockdownDeviceId: String? = null
     @Volatile private var activeWifiServiceName: String? = null
+    private val wifiInstallButtonsByService = mutableMapOf<String, Button>()
     private lateinit var pairButton: Button
     private lateinit var installButton: Button
     private var attachedAppleDevice: UsbDevice? = null
@@ -256,6 +257,7 @@ class DeviceConnectionActivity : Activity() {
                                         }
                                     }
                                     card.addView(wifiInstallButton)
+                                    wifiInstallButtonsByService[device.serviceName] = wifiInstallButton
                                 }
                                 wifiDevicesPanel.addView(card, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
                                 status.text = if (match != null) {
@@ -274,6 +276,10 @@ class DeviceConnectionActivity : Activity() {
                                     }
                                 }
                                 // Do not keep an install session alive after its Bonjour device disappears.
+                                wifiInstallButtonsByService.remove(serviceName)?.apply {
+                                    isEnabled = false
+                                    text = "iPhone đã mất kết nối — hãy quét lại"
+                                }
                                 if (activeWifiServiceName == serviceName) {
                                     activeWifiLockdownSession?.close()
                                     activeWifiLockdownSession = null
