@@ -235,6 +235,9 @@ internal fun validatePairedServiceCertificates(
         if (rootCertificate.basicConstraints < 0) {
             throw IOException("saved root certificate is not marked as a certificate authority")
         }
+        if (rootCertificate.keyUsage?.getOrNull(5) != true) {
+            throw IOException("saved root certificate must allow certificate signing")
+        }
         if (hostCertificate.basicConstraints >= 0 || deviceCertificate.basicConstraints >= 0) {
             throw IOException("paired host and device certificates must not be certificate authorities")
         }
