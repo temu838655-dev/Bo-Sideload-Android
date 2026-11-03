@@ -120,7 +120,20 @@ internal object AppleSigningCompatibility {
         } finally {
             passwordChars.fill(0.toChar())
         }
-        return check(metadata, profile, certificates, now, targetUdid)
+        val baseCheck = check(metadata, profile, certificates, now, targetUdid)
+        val nestedBundles = findNestedCodeBundleInfoPlists(ipaFile)
+        return if (nestedBundles.isEmpty()) {
+            baseCheck
+        } else {
+            baseCheck.copy(
+                warnings = baseCheck.warnings + listOf(
+                    "IPA có " + nestedBundles.size + " app extension/Watch bundle lồng nhau. " +
+                        "Bản hiện tại chỉ nhận một provisioning profile qua giao diện ký; chưa chọn và đối chiếu profile riêng cho từng bundle. " +
+                        "zsign có thể xử lý nhiều profile qua nhiều tham số -m, nhưng Bo Sideload chưa cung cấp luồng đó. " +
+                        "Hãy kiểm tra từng extension sau khi ký và thử cài trên thiết bị trước khi sử dụng."
+                )
+            )
+        }
     }
 
     private fun readIpaMetadata(file: java.io.File): IpaPlistReader.Metadata? {
@@ -147,6 +160,33 @@ internal object AppleSigningCompatibility {
 
     internal fun isAppInfoPlistPath(path: String): Boolean =
         APP_INFO_PLIST_PATTERN.matches(path)
+
+    /**
+     * Finds nested executable bundles that can require their own App ID and
+     * provisioning profile. The current UI accepts only one profile, so these
+     * are surfaced as a preflight warning rather than silently claiming support.
+     */
+    internal fun findNestedCodeBundleInfoPlists(ipaFile: java.io.File): List<String> {
+        val found = linkedSetOf<String>()
+        java.util.zip.ZipInputStream(ipaFile.inputStream().buffered()).use { zip ->
+            var entries = 0
+            while (true) {
+                val entry = zip.nextEntry ?: break
+                entries += 1
+                require(entries <= MAX_ARCHIVE_ENTRIES) {
+                    "IPA có quá nhiều mục ZIP khi quét app extension."
+                }
+                if (!entry.isDirectory && isNestedCodeBundleInfoPlistPath(entry.name)) {
+                    found += entry.name
+                }
+                zip.closeEntry()
+            }
+        }
+        return found.toList()
+    }
+
+    internal fun isNestedCodeBundleInfoPlistPath(path: String): Boolean =
+        NESTED_CODE_BUNDLE_INFO_PATTERN.matches(path)
 
     internal fun hasKnownProfilePrefix(
         applicationIdentifier: String,
@@ -191,5 +231,8 @@ internal object AppleSigningCompatibility {
 
     private const val MAX_IPA_BYTES = 2L * 1024L * 1024L * 1024L
     private const val MAX_CREDENTIAL_BYTES = 10L * 1024L * 1024L
+    private const val MAX_ARCHIVE_ENTRIES = 100_000
     private val APP_INFO_PLIST_PATTERN = Regex("^Payload/[^/]+\\.app/Info\\.plist$")
+    private val NESTED_CODE_BUNDLE_INFO_PATTERN =
+        Regex("^Payload/[^/]+\\.app/(?:PlugIns/[^/]+\\.appex|Watch/[^/]+\\.app)/Info\\.plist$")
 }
