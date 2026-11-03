@@ -115,9 +115,9 @@ internal object LockdownPlistCodec {
         require(depth <= MAX_DEPTH) { "plist nesting is too deep" }
         counter[0]++
         require(counter[0] <= MAX_NODES) { "plist contains too many values" }
-        val children = element.childElements()
         return when (element.tagName) {
             "dict" -> {
+                val children = element.childElements()
                 require(children.size % 2 == 0) { "plist dictionary has an unmatched key" }
                 val result = linkedMapOf<String, Any?>()
                 var index = 0
@@ -131,7 +131,7 @@ internal object LockdownPlistCodec {
                 }
                 result
             }
-            "array" -> children.map { readValue(it, depth + 1, counter) }
+            "array" -> element.childElements().map { readValue(it, depth + 1, counter) }
             "string", "key" -> element.textContent
             "integer" -> element.textContent.trim().toLong()
             "real" -> element.textContent.trim().toDouble().also {
