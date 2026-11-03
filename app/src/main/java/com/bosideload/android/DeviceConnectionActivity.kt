@@ -21,6 +21,9 @@ class DeviceConnectionActivity : Activity() {
     private lateinit var usbManager: UsbManager
     private lateinit var status: TextView
     private lateinit var devicesPanel: LinearLayout
+    private lateinit var wifiDevicesPanel: LinearLayout
+    private lateinit var wifiScanButton: Button
+    private var activeWifiDiscovery: WifiAppleDeviceDiscovery? = null
     private lateinit var pairButton: Button
     private lateinit var installButton: Button
     private var attachedAppleDevice: UsbDevice? = null
@@ -105,6 +108,59 @@ class DeviceConnectionActivity : Activity() {
             setTextColor(0xFFFFD18A.toInt())
             setPadding(0, dp(6), 0, dp(10))
         })
+        wifiScanButton = Button(this).apply {
+            text = "Quét iPhone/iPad cùng Wi-Fi"
+            isAllCaps = false
+            setOnClickListener {
+                val current = activeWifiDiscovery
+                if (current != null) {
+                    current.close()
+                    activeWifiDiscovery = null
+                    text = "Quét iPhone/iPad cùng Wi-Fi"
+                } else {
+                    wifiDevicesPanel.removeAllViews()
+                    val discovery = WifiAppleDeviceDiscovery(this@DeviceConnectionActivity, object : WifiAppleDeviceDiscovery.Listener {
+                        override fun onStatus(message: String) {
+                            runOnUiThread { status.text = message }
+                        }
+
+                        override fun onDeviceFound(device: WifiAppleDeviceDiscovery.DiscoveredDevice) {
+                            runOnUiThread {
+                                val card = LinearLayout(this@DeviceConnectionActivity).apply {
+                                    orientation = LinearLayout.VERTICAL
+                                    tag = device.serviceName
+                                    setPadding(dp(12), dp(10), dp(12), dp(10))
+                                    setBackgroundColor(0xFF162135.toInt())
+                                }
+                                card.addView(TextView(this@DeviceConnectionActivity).apply {
+                                    text = "Dịch vụ Bonjour: ${device.serviceName}\nĐịa chỉ mạng: ${device.hostAddress}:${device.port}\nTXT keys: ${device.txtKeys.sorted().joinToString().ifBlank { "không có" }}\nChưa xác thực danh tính — chưa thể kết nối hoặc cài IPA."
+                                    textSize = 13f
+                                    setTextColor(-1)
+                                })
+                                wifiDevicesPanel.addView(card, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+                                status.text = "Đã phát hiện dịch vụ Apple trên Wi-Fi. Thiết bị vẫn cần xác thực bằng pairing record trước khi kết nối."
+                            }
+                        }
+
+                        override fun onDeviceLost(serviceName: String) {
+                            runOnUiThread {
+                                for (index in wifiDevicesPanel.childCount - 1 downTo 0) {
+                                    if (wifiDevicesPanel.getChildAt(index).tag == serviceName) {
+                                        wifiDevicesPanel.removeViewAt(index)
+                                    }
+                                }
+                            }
+                        }
+                    })
+                    activeWifiDiscovery = discovery
+                    wifiScanButton.text = "Dừng quét Wi-Fi"
+                    discovery.start()
+                }
+            }
+        }
+        root.addView(wifiScanButton)
+        wifiDevicesPanel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        root.addView(wifiDevicesPanel)
         pairButton = Button(this).apply {
             text = "Ghép đôi iPhone (Lockdown)"
             isAllCaps = false
@@ -149,6 +205,8 @@ class DeviceConnectionActivity : Activity() {
         activeMonitor?.close()
         activeMonitor = null
         activeMonitorDeviceId = null
+        activeWifiDiscovery?.close()
+        activeWifiDiscovery = null
         attachedAppleDevice = null
         super.onDestroy()
     }
