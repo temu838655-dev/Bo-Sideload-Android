@@ -5,7 +5,6 @@ import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
 import java.io.Closeable
-import java.net.InetAddress
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -34,11 +33,14 @@ internal class WifiAppleDeviceDiscovery(
 
     private val appContext = context.applicationContext
     private val nsdManager = appContext.getSystemService(Context.NSD_SERVICE) as NsdManager
-    private val wifiManager = appContext.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+    private val wifiManager = appContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
     private val multicastLock = wifiManager.createMulticastLock("BoSideload-mdns").apply {
         setReferenceCounted(false)
     }
-    private val resolvedNames = ConcurrentHashMap.newKeySet<String>()
+
+    // The token identifies one specific resolve request. A service name may
+    // disappear and reappear while an older resolve callback is still queued.
+    private val resolvingTokens = ConcurrentHashMap<String, Any>()
     @Volatile private var closed = false
     @Volatile private var discoveryStarted = false
 
@@ -50,22 +52,27 @@ internal class WifiAppleDeviceDiscovery(
 
         override fun onServiceFound(serviceInfo: NsdServiceInfo) {
             if (closed || serviceInfo.serviceType.trimEnd('.') != SERVICE_TYPE.trimEnd('.')) return
-            if (!resolvedNames.add(serviceInfo.serviceName)) return
+            val token = Any()
+            if (resolvingTokens.putIfAbsent(serviceInfo.serviceName, token) != null) return
             try {
                 nsdManager.resolveService(serviceInfo, object : NsdManager.ResolveListener {
                     override fun onResolveFailed(info: NsdServiceInfo, errorCode: Int) {
-                        resolvedNames.remove(info.serviceName)
-                        if (!closed) listener.onStatus("Không phân giải được dịch vụ mDNS: $errorCode")
+                        resolvingTokens.remove(info.serviceName, token)
+                        if (!closed && resolvingTokens[info.serviceName] == token) {
+                            listener.onStatus("Không phân giải được dịch vụ mDNS: $errorCode")
+                        } else if (!closed) {
+                            listener.onStatus("Không phân giải được dịch vụ mDNS: $errorCode")
+                        }
                     }
 
                     override fun onServiceResolved(info: NsdServiceInfo) {
-                        // NSD callbacks can arrive out of order: a service may disappear
-                        // while resolveService is still running. Ignore that stale result.
-                        if (closed || !resolvedNames.contains(info.serviceName)) return
+                        // Ignore a callback unless it still belongs to the current
+                        // resolve attempt for this service name.
+                        if (closed || resolvingTokens[info.serviceName] !== token) return
                         val address = info.host?.hostAddress
                         val port = info.port
                         if (address.isNullOrBlank() || port !in 1..65535) {
-                            resolvedNames.remove(info.serviceName)
+                            resolvingTokens.remove(info.serviceName, token)
                             return
                         }
                         listener.onDeviceFound(
@@ -73,30 +80,34 @@ internal class WifiAppleDeviceDiscovery(
                                 serviceName = info.serviceName,
                                 hostAddress = address,
                                 port = port,
-                                txtRecord = info.attributes.mapValues { (_, value) -> String(value, Charsets.UTF_8) }
+                                txtRecord = info.attributes.mapValues { (_, value) ->
+                                    String(value, Charsets.UTF_8)
+                                }
                             )
                         )
                     }
                 })
             } catch (_: RuntimeException) {
-                resolvedNames.remove(serviceInfo.serviceName)
+                resolvingTokens.remove(serviceInfo.serviceName, token)
             }
         }
 
         override fun onServiceLost(serviceInfo: NsdServiceInfo) {
-            resolvedNames.remove(serviceInfo.serviceName)
+            resolvingTokens.remove(serviceInfo.serviceName)
             if (!closed) listener.onDeviceLost(serviceInfo.serviceName)
         }
 
         override fun onDiscoveryStopped(serviceType: String) {
             discoveryStarted = false
             releaseMulticastLock()
+            resolvingTokens.clear()
             if (!closed) listener.onStatus("Đã dừng quét Wi-Fi.")
         }
 
         override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
             discoveryStarted = false
-            if (multicastLock.isHeld) multicastLock.release()
+            releaseMulticastLock()
+            resolvingTokens.clear()
             if (!closed) listener.onStatus("Không thể bắt đầu quét Bonjour/mDNS (mã $errorCode).")
             runCatching { nsdManager.stopServiceDiscovery(this) }
         }
@@ -114,12 +125,12 @@ internal class WifiAppleDeviceDiscovery(
     fun start() {
         check(!closed) { "discovery is closed" }
         if (discoveryStarted) return
-        resolvedNames.clear()
+        resolvingTokens.clear()
         if (!multicastLock.isHeld) multicastLock.acquire()
         try {
             nsdManager.discoverServices(SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, discoveryListener)
         } catch (error: RuntimeException) {
-            if (multicastLock.isHeld) multicastLock.release()
+            releaseMulticastLock()
             listener.onStatus("Không thể quét Bonjour/mDNS: ${error.message ?: "lỗi hệ thống"}")
         }
     }
@@ -132,13 +143,13 @@ internal class WifiAppleDeviceDiscovery(
     fun stop() {
         if (discoveryStarted) runCatching { nsdManager.stopServiceDiscovery(discoveryListener) }
         discoveryStarted = false
+        resolvingTokens.clear()
         releaseMulticastLock()
     }
 
     override fun close() {
         closed = true
         stop()
-        resolvedNames.clear()
     }
 
     companion object {
