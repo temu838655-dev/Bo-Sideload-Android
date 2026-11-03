@@ -187,7 +187,7 @@ class DeviceConnectionActivity : Activity() {
                                                         activeWifiLockdownDeviceId = match.deviceId
                                                         text = "Đã xác thực TLS"
                                                         wifiInstallButton?.isEnabled = true
-                                                        status.text = "Đã xác thực Lockdown TLS với iPhone qua Wi-Fi. Phiên đang được giữ an toàn; truyền IPA/cài đặt qua Wi-Fi chưa được nối ở bước này."
+                                                        status.text = "Đã xác thực Lockdown TLS với iPhone qua Wi-Fi. Phiên đã sẵn sàng; chọn “Cài IPA qua Wi-Fi” để gửi IPA đã ký từ màn hình chính."
                                                     } else {
                                                         isEnabled = true
                                                         status.text = "Không xác thực được Lockdown TLS qua Wi-Fi: ${failure?.message ?: "lỗi không xác định"}"
