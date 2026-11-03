@@ -91,7 +91,7 @@ class LockdownPlistCodecTest {
     @Test
     fun decodesBinaryApplePropertyList() {
         val encoded = java.util.Base64.getDecoder().decode(
-            "YnBsaXN0MDDVAQIDBAUGBwgJClVDb3VudFdFbmFibGVkV1BheWxvYWRXUmVxdWVzdFVWYWx1ZRAHCUIBAllRdWVyeVR5cGVfEBljb20uYXBwbGUubW9iaWxlLmxvY2tkb3duCBMZISkxNzk6PUcAAAAAAAABAQAAAAAAAAALAAAAAAAAAAAAAAAAAAAAYw=="
+            "YnBsaXN0MDDVAQIDBAUGBwgJCldSZXF1ZXN0VVZhbHVlVUNvdW50V0VuYWJsZWRXUGF5bG9hZFlRdWVyeVR5cGVfEBljb20uYXBwbGUubW9iaWxlLmxvY2tkb3duEAcJQgECCBMbIScvN0FdX2AAAAAAAAABAQAAAAAAAAALAAAAAAAAAAAAAAAAAAAAYw=="
         )
         val decoded = LockdownPlistCodec.decode(encoded)
         assertEquals("QueryType", decoded["Request"])
