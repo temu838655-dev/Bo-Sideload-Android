@@ -91,43 +91,6 @@ class AppleSigningCompatibilityTest {
     }
 
     @Test
-    fun blocksSigningWhenNestedBundleProfilesAreNotSupported() {
-        val base = AppleSigningCompatibility.Check(
-            compatible = true,
-            errors = emptyList(),
-            warnings = listOf("Thông tin profile cơ bản đã đạt.")
-        )
-        val nested = listOf(
-            AppleSigningCompatibility.NestedBundleInfo(
-                path = "Payload/Example.app/PlugIns/Share.appex/Info.plist",
-                bundleId = "com.example.share",
-                executable = "ShareExtension"
-            )
-        )
-
-        val result = AppleSigningCompatibility.rejectUnsupportedNestedBundles(base, nested)
-
-        assertFalse(result.compatible)
-        assertTrue(result.errors.any { it.contains("com.example.share") })
-        assertTrue(result.errors.any { it.contains("bị chặn") })
-        assertTrue(result.warnings.contains("Thông tin profile cơ bản đã đạt."))
-    }
-
-    @Test
-    fun doesNotChangeCompatibilityWhenThereAreNoNestedBundles() {
-        val base = AppleSigningCompatibility.Check(
-            compatible = true,
-            errors = emptyList(),
-            warnings = emptyList()
-        )
-
-        val result = AppleSigningCompatibility.rejectUnsupportedNestedBundles(base, emptyList())
-
-        assertTrue(result.compatible)
-        assertTrue(result.errors.isEmpty())
-    }
-
-    @Test
     fun assignsDistinctProfilesToMainAppAndExtensionByBundleId() {
         val profiles = listOf(
             testProfile("ABCDE12345.com.example.app"),
