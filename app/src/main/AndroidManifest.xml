@@ -12,6 +12,9 @@
         android:label="Bo Sideload"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity
+            android:name=".AppleConnectActivity"
+            android:exported="false" />
+        <activity
             android:name=".AppleSigningGuideActivity"
             android:exported="false" />
         <activity
