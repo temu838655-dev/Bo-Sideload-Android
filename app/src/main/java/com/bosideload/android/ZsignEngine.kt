@@ -110,9 +110,35 @@ internal class ZsignEngine(private val context: Context) {
             val process = ProcessBuilder(binary.absolutePath, "-v")
                 .redirectErrorStream(true)
                 .start()
-            val text = process.inputStream.bufferedReader().use { it.readText() }.trim()
-            if (process.waitFor(15, TimeUnit.SECONDS) && process.exitValue() == 0) text
-            else "Không xác định được phiên bản zsign."
+            val output = StringBuilder()
+            val reader = Thread {
+                process.inputStream.bufferedReader().useLines { lines ->
+                    lines.forEach { line ->
+                        synchronized(output) {
+                            if (output.length < MAX_VERSION_OUTPUT_CHARS) {
+                                output.append(line).append('\\n')
+                            }
+                        }
+                    }
+                }
+            }
+            reader.start()
+
+            val finished = process.waitFor(VERSION_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            if (!finished) {
+                process.destroyForcibly()
+                process.inputStream.close()
+                reader.join(2_000)
+                "Không xác định được phiên bản zsign (quá thời gian chờ)."
+            } else {
+                reader.join(2_000)
+                if (process.exitValue() == 0) {
+                    synchronized(output) { output.toString().trim() }
+                        .ifEmpty { "zsign không trả về thông tin phiên bản." }
+                } else {
+                    "Không xác định được phiên bản zsign."
+                }
+            }
         } catch (error: Exception) {
             "Bộ ký chưa sẵn sàng: ${error.message ?: "không rõ lỗi"}"
         }
@@ -138,5 +164,7 @@ internal class ZsignEngine(private val context: Context) {
     private companion object {
         const val PROCESS_TIMEOUT_MINUTES = 10L
         const val MAX_LOG_CHARS = 32_000
+        const val VERSION_TIMEOUT_SECONDS = 15L
+        const val MAX_VERSION_OUTPUT_CHARS = 4_000
     }
 }
