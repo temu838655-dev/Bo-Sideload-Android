@@ -21,6 +21,7 @@ class DeviceConnectionActivity : Activity() {
     private lateinit var usbManager: UsbManager
     private lateinit var status: TextView
     private lateinit var devicesPanel: LinearLayout
+    private var diagnosticReport: String = "Chưa có dữ liệu USB."
     private val permissionAction = "com.bosideload.android.USB_PERMISSION"
 
     private val permissionReceiver = object : BroadcastReceiver() {
@@ -64,6 +65,11 @@ class DeviceConnectionActivity : Activity() {
         })
         devicesPanel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(devicesPanel)
+        root.addView(Button(this).apply {
+            text = "Chia sẻ báo cáo USB"
+            isAllCaps = false
+            setOnClickListener { shareDiagnosticReport() }
+        })
         root.addView(TextView(this).apply {
             text = "Giới hạn: màn hình này dò USB và xin quyền Android. Chưa có ghép đôi Apple Lockdown/usbmuxd, đọc thông tin iPhone hoặc cài IPA. Thấy USB không có nghĩa là iPhone đã kết nối tin cậy."
             textSize = 13f
@@ -94,6 +100,7 @@ class DeviceConnectionActivity : Activity() {
         val devices = usbManager.deviceList.values.toList()
         if (devices.isEmpty()) {
             status.text = "Chưa phát hiện USB. Kiểm tra cáp truyền dữ liệu, OTG và thử quét lại."
+            diagnosticReport = status.text.toString()
             return
         }
         devices.forEach { device ->
@@ -147,11 +154,41 @@ class DeviceConnectionActivity : Activity() {
             }
             devicesPanel.addView(card, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
         }
+        diagnosticReport = buildString {
+            appendLine("Bo Sideload - Báo cáo chẩn đoán USB")
+            appendLine("Số thiết bị: ${devices.size}")
+            devices.forEachIndexed { index, device ->
+                appendLine("\nThiết bị ${index + 1}: ${device.deviceName}")
+                appendLine("VID: ${hex(device.vendorId)} PID: ${hex(device.productId)}")
+                appendLine("USB class: ${device.deviceClass}; interfaces: ${device.interfaceCount}")
+                appendLine("Android permission: ${usbManager.hasPermission(device)}")
+                if (usbManager.hasPermission(device)) {
+                    for (i in 0 until device.interfaceCount) {
+                        val usbInterface = device.getInterface(i)
+                        appendLine("Interface $i: class=${hex(usbInterface.interfaceClass)} subclass=${hex(usbInterface.interfaceSubclass)} protocol=${hex(usbInterface.interfaceProtocol)}")
+                        for (e in 0 until usbInterface.endpointCount) {
+                            val endpoint = usbInterface.getEndpoint(e)
+                            appendLine("Endpoint $e: address=${hex(endpoint.address)} direction=${endpoint.direction} type=${endpoint.type} maxPacket=${endpoint.maxPacketSize}")
+                        }
+                    }
+                }
+            }
+            appendLine("\nUSB enumeration only; no Apple Lockdown pairing or IPA installation performed.")
+        }
         status.text = if (devices.any { it.vendorId == APPLE_VENDOR_ID }) {
             "Đã thấy VID Apple 05AC ở tầng USB. Chưa xác nhận Lockdown pairing hoặc khả năng cài ứng dụng."
         } else {
             "Có USB nhưng không thấy VID Apple (05AC). Kiểm tra thiết bị, cáp và OTG."
         }
+    }
+
+    private fun shareDiagnosticReport() {
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, "Bo Sideload USB diagnostics")
+            putExtra(Intent.EXTRA_TEXT, diagnosticReport)
+        }
+        startActivity(Intent.createChooser(intent, "Chia sẻ báo cáo USB"))
     }
 
     private fun requestUsbPermission(device: UsbDevice) {
