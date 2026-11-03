@@ -107,8 +107,8 @@ class AppleConnectActivity : Activity() {
     }
 
     private fun saveAndValidate() {
-        val pem = p8
-        if (pem.isNullOrBlank()) { status.text = "Hãy chọn tệp .p8 trước."; return }
+        val pem = p8 ?: runCatching { vault.load()?.privateKeyPem }.getOrNull()
+        if (pem.isNullOrBlank()) { status.text = "Chọn tệp .p8 hoặc kiểm tra khóa đã lưu."; return }
         val credentials = AppleConnectCredentialVault.Credentials(
             keyId.text.toString().trim(), issuerId.text.toString().trim(), pem
         )
