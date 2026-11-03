@@ -7,6 +7,7 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * XML-plist property-list service framing used by installation_proxy.
@@ -79,14 +80,13 @@ internal class InstallationProxyClient(
     private val output: OutputStream,
     private val maxPayloadBytes: Int = PropertyListServiceCodec.DEFAULT_MAX_PAYLOAD_BYTES
 ) : Closeable {
-    private var closed = false
-    private var operationInProgress = false
+    private val closed = AtomicBoolean(false)
+    private val operationInProgress = AtomicBoolean(false)
 
     init {
         require(maxPayloadBytes > 0)
     }
 
-    @Synchronized
     @Throws(IOException::class)
     fun install(
         remotePackagePath: String,
@@ -94,7 +94,9 @@ internal class InstallationProxyClient(
         onProgress: ((InstallationProgress) -> Unit)? = null
     ) {
         checkOpen()
-        check(!operationInProgress) { "an installation_proxy operation is already running" }
+        check(operationInProgress.compareAndSet(false, true)) {
+            "an installation_proxy operation is already running"
+        }
         require(remotePackagePath.startsWith("/") && remotePackagePath.length > 1) {
             "PackagePath must be an absolute device path"
         }
@@ -102,7 +104,6 @@ internal class InstallationProxyClient(
         require(!remotePackagePath.split('/').any { it == "." || it == ".." }) {
             "PackagePath contains traversal segments"
         }
-        operationInProgress = true
         try {
             val command = linkedMapOf<String, Any?>(
                 "Command" to "Install",
@@ -150,18 +151,16 @@ internal class InstallationProxyClient(
                 if (status == "Complete") return
             }
         } finally {
-            operationInProgress = false
+            operationInProgress.set(false)
         }
     }
 
     private fun checkOpen() {
-        if (closed) throw IOException("installation_proxy client is closed")
+        if (closed.get()) throw IOException("installation_proxy client is closed")
     }
 
-    @Synchronized
     override fun close() {
-        if (closed) return
-        closed = true
+        if (!closed.compareAndSet(false, true)) return
         runCatching { input.close() }
         runCatching { output.close() }
     }
