@@ -120,6 +120,8 @@ internal object AppleProvisioningProfileManager {
             }
         }
 
+        validateRelationships(credentials, request)
+
         val certificates = JSONArray()
         request.certificateResourceIds.distinct().forEach {
             certificates.put(JSONObject().put("type", "certificates").put("id", it))
@@ -185,6 +187,95 @@ internal object AppleProvisioningProfileManager {
                 (error.message ?: error.javaClass.simpleName))
         } finally {
             body.fill(0)
+            connection.disconnect()
+        }
+    }
+
+    /**
+     * Validate the exact resource IDs before creating a profile. This prevents
+     * accidental use of a macOS/tvOS App ID, development certificate in an
+     * Ad Hoc/App Store profile, disabled device, or unrelated resource ID.
+     */
+    private fun validateRelationships(
+        credentials: AppleConnectCredentialVault.Credentials,
+        request: Request
+    ) {
+        val bundle = getResource(credentials,
+            "/v1/bundleIds/${request.bundleIdResourceId}?fields%5BbundleIds%5D=identifier,name,platform")
+        val bundleAttrs = bundle.optJSONObject("attributes") ?: JSONObject()
+        val platform = bundleAttrs.optString("platform")
+        require(platform.equals("IOS", true) || platform.equals("UNIVERSAL", true)) {
+            "App ID đã chọn không phải App ID iOS (platform=$platform)."
+        }
+        val identifier = bundleAttrs.optString("identifier")
+        require(identifier.isNotBlank() && identifier.contains('.')) {
+            "Apple App ID không trả Bundle Identifier hợp lệ."
+        }
+
+        val expectedCertType = if (request.type == Type.DEVELOPMENT) {
+            "IOS_DEVELOPMENT"
+        } else {
+            "IOS_DISTRIBUTION"
+        }
+        request.certificateResourceIds.distinct().forEach { id ->
+            val cert = getResource(credentials,
+                "/v1/certificates/$id?fields%5Bcertificates%5D=certificateType,expirationDate,displayName")
+            val attrs = cert.optJSONObject("attributes") ?: JSONObject()
+            val actual = attrs.optString("certificateType")
+            require(actual == expectedCertType) {
+                "Certificate $id có loại $actual; profile ${request.type.apiValue} cần $expectedCertType."
+            }
+            val expiry = attrs.optString("expirationDate")
+            if (expiry.isNotBlank()) {
+                val parsed = runCatching {
+                    java.time.OffsetDateTime.parse(expiry).toInstant()
+                }.getOrNull()
+                require(parsed == null || parsed.isAfter(java.time.Instant.now())) {
+                    "Certificate $id đã hết hạn."
+                }
+            }
+        }
+
+        request.deviceResourceIds.distinct().forEach { id ->
+            val device = getResource(credentials,
+                "/v1/devices/$id?fields%5Bdevices%5D=name,udid,platform,status")
+            val attrs = device.optJSONObject("attributes") ?: JSONObject()
+            val devicePlatform = attrs.optString("platform")
+            val status = attrs.optString("status")
+            require(devicePlatform.equals("IOS", true)) {
+                "Thiết bị $id không phải thiết bị iOS (platform=$devicePlatform)."
+            }
+            require(status.equals("ENABLED", true)) {
+                "Thiết bị $id không ở trạng thái ENABLED (status=$status)."
+            }
+        }
+    }
+
+    private fun getResource(
+        credentials: AppleConnectCredentialVault.Credentials,
+        path: String
+    ): JSONObject {
+        val connection = URL("https://api.appstoreconnect.apple.com$path")
+            .openConnection() as HttpsURLConnection
+        return try {
+            connection.requestMethod = "GET"
+            connection.connectTimeout = 15000
+            connection.readTimeout = 25000
+            connection.setRequestProperty("Authorization", "Bearer " + AppleConnectJwt.token(credentials))
+            connection.setRequestProperty("Accept", "application/json")
+            val code = connection.responseCode
+            val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+            val body = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+            if (code !in 200..299) {
+                val detail = runCatching {
+                    JSONObject(body).optJSONArray("errors")?.optJSONObject(0)
+                        ?.optString("detail").orEmpty()
+                }.getOrDefault("")
+                throw IllegalStateException("Apple không đọc được tài nguyên (HTTP $code)." +
+                    if (detail.isNotBlank()) " $detail" else "")
+            }
+            JSONObject(body).getJSONObject("data")
+        } finally {
             connection.disconnect()
         }
     }
