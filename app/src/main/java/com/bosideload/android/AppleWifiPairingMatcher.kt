@@ -1,6 +1,6 @@
 package com.bosideload.android
 
-import android.util.Base64
+import java.util.Base64
 import java.nio.charset.StandardCharsets
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
@@ -46,7 +46,7 @@ internal object AppleWifiPairingMatcher {
     }
 
     private fun decodeTag(value: String): ByteArray? =
-        runCatching { Base64.decode(value, Base64.DEFAULT) }
+        runCatching { Base64.getDecoder().decode(value) }
             .getOrNull()
             ?.takeIf { it.size >= 8 }
             ?.copyOfRange(0, 8)
