@@ -1,6 +1,6 @@
 package com.bosideload.android
 
-import android.util.Base64
+import java.util.Base64
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -12,7 +12,7 @@ class AppleWifiPairingMatcherTest {
             "00000000-0000-0000-0000-000000000001",
             "2BE6E510-0325-4365-923E-B14C6F57DB3A"
         )
-        assertEquals("DSc62y1VXy0=", Base64.encodeToString(actual, Base64.NO_WRAP))
+        assertEquals("DSc62y1VXy0=", Base64.getEncoder().encodeToString(actual))
     }
 
     @Test
