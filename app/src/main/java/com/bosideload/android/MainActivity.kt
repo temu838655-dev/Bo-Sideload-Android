@@ -281,7 +281,8 @@ class MainActivity : Activity() {
                         }
                     )
                 } else {
-                    result = ZsignEngine(this).sign(input, p12, profiles, password, output)
+                    val orderedProfiles = preflight.profileOrder.map { profiles[it] }
+                    result = ZsignEngine(this).sign(input, p12, orderedProfiles, password, output)
                     if (result.success) signedFile = result.output
                     if (preflight.warnings.isNotEmpty()) {
                         result = result.copy(message = result.message + "\n\nKIỂM TRA TRƯỚC KHI KÝ\n" +
