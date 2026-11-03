@@ -80,14 +80,14 @@ class MainActivity : Activity() {
         }, fullWidth())
 
         page.addView(Button(this).apply {
-            text = "Kết nối iPhone qua USB"
+            text = "Kết nối iPhone (USB / Wi-Fi)"
             isAllCaps = false
             setOnClickListener {
                 startActivity(Intent(this@MainActivity, DeviceConnectionActivity::class.java))
             }
         }, fullWidth())
         installSignedButton = Button(this).apply {
-            text = "Cài IPA đã ký lên iPhone qua USB"
+            text = "Cài IPA đã ký lên iPhone (USB / Wi-Fi)"
             isAllCaps = false
             isEnabled = false
             visibility = android.view.View.GONE
@@ -352,7 +352,7 @@ class MainActivity : Activity() {
                 val output = contentResolver.openOutputStream(destination)
                     ?: throw IllegalStateException("Không mở được vị trí lưu.")
                 output.use { target -> source.inputStream().use { it.copyTo(target) } }
-                "✓ Đã xuất bản sao IPA đã ký. Bản tạm vẫn được giữ trong ứng dụng để dùng cho bước cài qua USB."
+                "✓ Đã xuất bản sao IPA đã ký. Bản tạm vẫn được giữ trong ứng dụng để dùng cho bước cài qua USB hoặc Wi-Fi."
             } catch (error: Exception) {
                 "Không xuất được IPA: ${error.message ?: "lỗi không xác định"}"
             }
