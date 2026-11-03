@@ -199,7 +199,8 @@ internal object MachOInspector {
                     version >= 0x20500L -> 96L
                     version >= 0x20400L -> 88L
                     version >= 0x20300L -> 64L
-                    version >= 0x20200L -> 48L
+                    version >= 0x20200L -> 52L
+                    version >= 0x20100L -> 48L
                     else -> 44L
                 }
                 if (cdLength < fixedHeaderSize || identOffset < fixedHeaderSize ||
