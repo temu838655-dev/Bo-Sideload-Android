@@ -257,7 +257,7 @@ class DeviceConnectionActivity : Activity() {
                                         }
                                     }
                                     card.addView(wifiInstallButton)
-                                    wifiInstallButtonsByService[device.serviceName] = wifiInstallButton
+                                    wifiInstallButton?.let { wifiInstallButtonsByService[device.serviceName] = it }
                                 }
                                 wifiDevicesPanel.addView(card, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
                                 status.text = if (match != null) {
