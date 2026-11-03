@@ -31,7 +31,7 @@ internal class UsbMuxListenSession(
     @Synchronized
     @Throws(IOException::class)
     fun readNextResponse(): UsbMuxResponseParser.Response {
-        check(!closed) { "usbmux Listen session is closed" }
+        check(!closed.get()) { "usbmux Listen session is closed" }
         check(started) { "start Listen before reading usbmux events" }
         return UsbMuxResponseParser.parse(transport.readPacket())
     }
