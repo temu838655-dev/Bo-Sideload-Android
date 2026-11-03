@@ -223,6 +223,15 @@ internal fun validatePairedServiceCertificates(
     deviceCertificate: X509Certificate
 ) {
     try {
+        if (rootCertificate.subjectX500Principal != rootCertificate.issuerX500Principal) {
+            throw IOException("saved root certificate is not self-issued")
+        }
+        if (hostCertificate.issuerX500Principal != rootCertificate.subjectX500Principal) {
+            throw IOException("HostCertificate issuer does not match the saved root")
+        }
+        if (deviceCertificate.issuerX500Principal != rootCertificate.subjectX500Principal) {
+            throw IOException("DeviceCertificate issuer does not match the saved root")
+        }
         rootCertificate.verify(rootCertificate.publicKey)
         hostCertificate.verify(rootCertificate.publicKey)
         deviceCertificate.verify(rootCertificate.publicKey)
