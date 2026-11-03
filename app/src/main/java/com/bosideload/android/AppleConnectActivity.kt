@@ -19,6 +19,7 @@ class AppleConnectActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var vault: AppleConnectCredentialVault
     private var p8: String? = null
+    private var currentCsr: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -46,7 +47,15 @@ class AppleConnectActivity : Activity() {
             setOnClickListener { saveAndValidate() }
         }, full())
         page.addView(Button(this).apply {
-            text = "Xóa API Key đã lưu"; isAllCaps = false
+            text = "③ Tạo khóa ký P-256 và CSR trên thiết bị"; isAllCaps = false
+            setOnClickListener { generateLocalCsr() }
+        }, full())
+        page.addView(Button(this).apply {
+            text = "④ Xuất CSR để lưu thành tệp"; isAllCaps = false
+            setOnClickListener { exportCsr() }
+        }, full())
+        page.addView(Button(this).apply {
+            text = "Xóa toàn bộ khóa API và khóa ký đã lưu"; isAllCaps = false
             setOnClickListener {
                 vault.clear(); p8 = null; keyId.text.clear(); issuerId.text.clear()
                 status.text = "Đã xóa khóa API và dữ liệu mã hóa khỏi ứng dụng trên thiết bị."
@@ -60,6 +69,7 @@ class AppleConnectActivity : Activity() {
             "Apple chỉ cho tải private key .p8 một lần. Nếu mất hoặc lộ khóa, hãy thu hồi key và tạo key mới. Individual API Key không dùng được Provisioning endpoints. Bản này chỉ kiểm tra kết nối, chưa tạo certificate/profile hoặc đăng ký UDID.",
             13, 0xFFFFD28A.toInt(), true), full())
         page.addView(Button(this).apply { text = "Quay lại"; isAllCaps = false; setOnClickListener { finish() } }, full())
+        currentCsr = runCatching { vault.loadSigningMaterial()?.csrPem }.getOrNull()
         vault.load()?.let {
             keyId.setText(it.keyId); issuerId.setText(it.issuerId)
             status.text = "Đã lưu thông tin API Key được mã hóa trên thiết bị. Chưa xác minh loại key hoặc quyền truy cập; bấm kiểm tra để xác nhận với Apple."
@@ -84,8 +94,20 @@ class AppleConnectActivity : Activity() {
     @Deprecated("Deprecated in Android")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode != 810 || resultCode != RESULT_OK) return
+        if (resultCode != RESULT_OK) return
         val uri: Uri = data?.data ?: return
+        if (requestCode == 811) {
+            val csr = currentCsr ?: run { status.text = "Chưa có CSR. Hãy tạo CSR trước."; return }
+            try {
+                contentResolver.openOutputStream(uri)?.use { it.write(csr.toByteArray(Charsets.US_ASCII)) }
+                    ?: error("Không mở được tệp đích.")
+                status.text = "Đã xuất CSR. Tệp này không chứa khóa riêng."
+            } catch (e: Exception) {
+                status.text = "Không thể xuất CSR: " + (e.message ?: "lỗi ghi tệp")
+            }
+            return
+        }
+        if (requestCode != 810) return
         try {
             val bytes = contentResolver.openInputStream(uri)?.use { input ->
                 val out = ByteArrayOutputStream(); val buffer = ByteArray(2048); var total = 0
@@ -104,6 +126,41 @@ class AppleConnectActivity : Activity() {
         } catch (e: Exception) {
             p8 = null; status.text = "Không đọc được .p8: " + (e.message ?: "lỗi không xác định")
         }
+    }
+
+
+    private fun generateLocalCsr() {
+        status.text = "Đang tạo khóa ký P-256 và CSR cục bộ…"
+        Thread {
+            val result = runCatching {
+                val generated = AppleCsrGenerator.generate()
+                vault.saveSigningMaterial(generated.material)
+                generated.material.csrPem
+            }
+            runOnUiThread {
+                result.onSuccess {
+                    currentCsr = it
+                    status.text = "Đã tạo cặp khóa P-256 và CSR. Khóa riêng được mã hóa bằng Android Keystore; CSR sẵn sàng xuất. Chưa gửi dữ liệu lên Apple."
+                }.onFailure {
+                    status.text = "Không tạo được CSR: " + (it.message ?: "lỗi không xác định")
+                }
+            }
+        }.start()
+    }
+
+    private fun exportCsr() {
+        val csr = currentCsr ?: runCatching { vault.loadSigningMaterial()?.csrPem }.getOrNull()
+        if (csr.isNullOrBlank()) {
+            status.text = "Chưa có CSR. Hãy tạo khóa ký và CSR trước."
+            return
+        }
+        currentCsr = csr
+        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "application/pkcs10"
+            putExtra(Intent.EXTRA_TITLE, "Bo-Sideload-iOS.csr")
+        }
+        startActivityForResult(intent, 811)
     }
 
     private fun saveAndValidate() {
