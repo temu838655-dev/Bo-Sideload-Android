@@ -60,14 +60,14 @@ class LockdownPlistCodecTest {
     }
 
     @Test
-    fun rejectsDoctypeAndExternalEntities() {
-        val xml = """<!DOCTYPE plist [<!ENTITY x SYSTEM "file:///etc/passwd">]>
-            <plist><dict><key>Value</key><string>&x;</string></dict></plist>"""
-        assertThrows(Exception::class.java) {
-            LockdownPlistCodec.decode(xml.toByteArray())
-        }
+    fun acceptsAppleDoctypeWithoutResolvingExternalEntities() {
+        val xml = """<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+            "http://www.apple.com/DTDs/PropertyList-1.0.dtd"
+            [<!ENTITY x SYSTEM "file:///etc/passwd">]>
+            <plist version="1.0"><dict><key>Value</key><string>&x;</string></dict></plist>"""
+        val decoded = LockdownPlistCodec.decode(xml.toByteArray())
+        assertEquals("", decoded["Value"])
     }
-
     @Test
     fun rejectsOversizedPayloadsAndUnsupportedValues() {
         assertThrows(IllegalArgumentException::class.java) {
