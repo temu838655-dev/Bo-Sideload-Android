@@ -60,31 +60,39 @@ internal object LockdownPlistCodec {
 
     private fun StringBuilder.appendValue(value: Any?, depth: Int) {
         require(depth <= MAX_DEPTH) { "plist nesting is too deep" }
+        val out = this
         when (value) {
             is Map<*, *> -> {
-                append("<dict>")
+                out.append("<dict>")
                 value.forEach { (key, item) ->
-                    require(key is String) { "plist dictionary keys must be strings" }
-                    append("<key>").appendEscaped(key).append("</key>")
-                    appendValue(item, depth + 1)
+                    val keyString = key as? String
+                        ?: throw IllegalArgumentException("plist dictionary keys must be strings")
+                    out.append("<key>")
+                    out.appendEscaped(keyString)
+                    out.append("</key>")
+                    out.appendValue(item, depth + 1)
                 }
-                append("</dict>")
+                out.append("</dict>")
             }
             is List<*> -> {
-                append("<array>")
-                value.forEach { appendValue(it, depth + 1) }
-                append("</array>")
+                out.append("<array>")
+                value.forEach { item -> out.appendValue(item, depth + 1) }
+                out.append("</array>")
             }
-            is String -> append("<string>").appendEscaped(value).append("</string>")
-            is Boolean -> append(if (value) "<true/>" else "<false/>")
+            is String -> {
+                out.append("<string>")
+                out.appendEscaped(value)
+                out.append("</string>")
+            }
+            is Boolean -> out.append(if (value) "<true/>" else "<false/>")
             is Byte, is Short, is Int, is Long ->
-                append("<integer>").append(value.toString()).append("</integer>")
+                out.append("<integer>").append(value.toString()).append("</integer>")
             is Float, is Double -> {
                 val number = (value as Number).toDouble()
                 require(number.isFinite()) { "plist real must be finite" }
-                append("<real>").append(number.toString()).append("</real>")
+                out.append("<real>").append(number.toString()).append("</real>")
             }
-            is ByteArray -> append("<data>").append(Base64.getEncoder().encodeToString(value)).append("</data>")
+            is ByteArray -> out.append("<data>").append(Base64.getEncoder().encodeToString(value)).append("</data>")
             null -> throw IllegalArgumentException("null is not a supported plist value")
             else -> throw IllegalArgumentException("unsupported plist value type: ${value.javaClass.name}")
         }
