@@ -54,6 +54,19 @@ internal object AppleProvisioningProfileManager {
         require(normalizedUdid.matches(Regex("[0-9A-F]{40}"))) {
             "UDID iPhone không hợp lệ. Cần UDID 40 ký tự hex lấy từ kết nối thiết bị đã xác minh."
         }
+        val existing = findDeviceByUdid(credentials, normalizedUdid)
+        if (existing != null) {
+            val status = existing.optJSONObject("attributes")?.optString("status").orEmpty()
+            val id = existing.optString("id")
+            return if (status.equals("ENABLED", true)) {
+                DeviceRegistrationResult(true,
+                    "iPhone này đã được đăng ký trước đó và đang ENABLED. Không tạo bản ghi trùng. Device resource ID: $id",
+                    id)
+            } else {
+                DeviceRegistrationResult(false,
+                    "iPhone đã có trong tài khoản Apple nhưng trạng thái là $status. Không tạo bản ghi trùng; hãy kiểm tra trạng thái thiết bị trong Apple Developer.")
+            }
+        }
         val body = JSONObject().put("data", JSONObject()
             .put("type", "devices")
             .put("attributes", JSONObject()
@@ -98,6 +111,43 @@ internal object AppleProvisioningProfileManager {
                 "Không thể đăng ký thiết bị: " + (error.message ?: error.javaClass.simpleName))
         } finally {
             body.fill(0)
+            connection.disconnect()
+        }
+    }
+
+    private fun findDeviceByUdid(
+        credentials: AppleConnectCredentialVault.Credentials,
+        udid: String
+    ): JSONObject? {
+        val url = URL("https://api.appstoreconnect.apple.com/v1/devices" +
+            "?filter%5Budid%5D=$udid&limit=10&fields%5Bdevices%5D=name,udid,platform,status")
+        val connection = url.openConnection() as HttpsURLConnection
+        return try {
+            connection.requestMethod = "GET"
+            connection.connectTimeout = 15000
+            connection.readTimeout = 25000
+            connection.setRequestProperty("Authorization", "Bearer " + AppleConnectJwt.token(credentials))
+            connection.setRequestProperty("Accept", "application/json")
+            val code = connection.responseCode
+            val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+            val response = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+            if (code !in 200..299) {
+                val detail = runCatching {
+                    JSONObject(response).optJSONArray("errors")?.optJSONObject(0)
+                        ?.optString("detail").orEmpty()
+                }.getOrDefault("")
+                throw IllegalStateException("Không kiểm tra được UDID đã tồn tại (HTTP $code)." +
+                    if (detail.isNotBlank()) " $detail" else "")
+            }
+            val data = JSONObject(response).optJSONArray("data") ?: JSONArray()
+            (0 until data.length()).asSequence()
+                .mapNotNull { data.optJSONObject(it) }
+                .firstOrNull { item ->
+                    val attrs = item.optJSONObject("attributes") ?: JSONObject()
+                    attrs.optString("udid").equals(udid, true) &&
+                        attrs.optString("platform").equals("IOS", true)
+                }
+        } finally {
             connection.disconnect()
         }
     }
