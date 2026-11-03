@@ -197,6 +197,8 @@ internal class AfcClient(
 
         private const val AFC_FOPEN_WRONLY = 0x03L
         private const val AFC_OP_STATUS = 0x01L
+        private const val AFC_OP_REMOVE_PATH = 0x08L
+        private val STAGED_IPA_PATH = Regex("^/PublicStaging/BoSideload-[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\.ipa$")
         private const val AFC_OP_FILE_OPEN = 0x0DL
         private const val AFC_OP_FILE_OPEN_RES = 0x0EL
         private const val AFC_OP_FILE_WRITE = 0x10L
