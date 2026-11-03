@@ -188,7 +188,7 @@ class MainActivity : Activity() {
         if (profileUris.isNotEmpty()) {
             prefs.edit().putStringSet(KEY_PROFILE_URIS, profileUris.map { it.toString() }.toSet())
                 .remove(KEY_PROFILE_URI).apply()
-            profileButton.text = "✓  Đã chọn ${'$'}{profileUris.size} provisioning profile"
+            profileButton.text = "✓  Đã chọn ${profileUris.size} provisioning profile"
         } else {
             prefs.edit().remove(KEY_PROFILE_URIS).remove(KEY_PROFILE_URI).apply()
             profileButton.text = "②  Chọn provisioning profile(s)"
@@ -410,7 +410,7 @@ class MainActivity : Activity() {
             getSharedPreferences(SIGNING_PREFS, MODE_PRIVATE).edit()
                 .putStringSet(KEY_PROFILE_URIS, profileUris.map { it.toString() }.toSet())
                 .remove(KEY_PROFILE_URI).apply()
-            profileButton.text = "✓  Đã chọn ${'$'}{profileUris.size} provisioning profile"
+            profileButton.text = "✓  Đã chọn ${profileUris.size} provisioning profile"
             updateSignButton()
             return
         }
@@ -428,7 +428,7 @@ class MainActivity : Activity() {
                         p12Uri = uri
                         getSharedPreferences(SIGNING_PREFS, MODE_PRIVATE).edit()
                             .putString(KEY_P12_URI, uri.toString()).apply()
-                        p12Button.text = "✓  Chứng chỉ đã lưu: ${'$'}{displayName(uri)}"
+                        p12Button.text = "✓  Chứng chỉ đã lưu: ${displayName(uri)}"
                         updateSignButton()
                     }
                 }
