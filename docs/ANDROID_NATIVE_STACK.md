@@ -12,7 +12,7 @@ The app keeps its Android UI and USB ownership in Kotlin. The following pieces a
 - AFC staging and Installation Proxy install orchestration for an already-signed IPA.
 - Bonjour/mDNS discovery of the legacy Apple Wi-Fi Sync service `_apple-mobdev2._tcp.`.
 
-The Wi-Fi discovery component is intentionally discovery-only. It displays a network service candidate but does not treat its IP address, port, service name or TXT keys as proof of identity.
+The Wi-Fi discovery component treats Bonjour records as untrusted hints. It compares the advertised authentication tag with locally stored Lockdown HostID values, then requires a user-initiated Lockdown StartSession and TLS peer-certificate pinning before enabling the Wi-Fi install path. This legacy Wi-Fi Sync path is experimental and has not been validated on physical hardware.
 
 ## Current transport boundary
 
@@ -20,8 +20,8 @@ The Wi-Fi discovery component is intentionally discovery-only. It displays a net
 Kotlin DeviceConnectionActivity
   |-- USB Host -> usbmux -> Lockdown -> TLS -> AFC -> Installation Proxy
   |
-  |-- Wi-Fi NSD/mDNS -> untrusted Apple Wi-Fi Sync candidate list
-                           (no socket connection or install yet)
+  |-- Wi-Fi NSD/mDNS -> authTag candidate match -> Lockdown TLS pinning
+                         -> AFC -> Installation Proxy (experimental)
 ```
 
 The current USB path is implemented in Kotlin rather than delegated to a desktop `usbmuxd` process. Android's `UsbDeviceConnection` remains owned by the app. Do not introduce a desktop daemon assumption that cannot access Android USB Host handles.
@@ -29,10 +29,10 @@ The current USB path is implemented in Kotlin rather than delegated to a desktop
 ## Wi-Fi implementation sequence
 
 1. (Done) Discover `_apple-mobdev2._tcp.` services using Android NSD and hold a Wi-Fi multicast lock only while scanning.
-2. Match a discovered service to a locally stored pairing record and validate the protocol's advertised authentication tag before any service connection.
-3. Add iOS 27+ device-initiated Remote Pairing host advertisement and PIN handoff using a reviewed, pinned protocol implementation.
-4. Establish the authenticated RemotePairing TLS-PSK tunnel, software TCP tunnel and Remote Service Discovery (RSD) session.
-5. Implement file transfer and install only through services the device advertises and authorizes.
+2. (Implemented; physical test pending) Match a discovered service to a locally stored pairing record, validate its advertised authentication tag, and require user-initiated Lockdown TLS authentication with the saved DeviceCertificate pinned.
+3. (Implemented; physical test pending) Reuse authenticated Wi-Fi TCP service connections for AFC staging and Installation Proxy installation.
+4. Add iOS 27+ device-initiated Remote Pairing host advertisement and PIN handoff using a reviewed, pinned protocol implementation.
+5. Establish the authenticated RemotePairing TLS-PSK tunnel, software TCP tunnel and Remote Service Discovery (RSD) session.
 6. Add cancellation, bounded parsing, timeout handling, integration tests and physical-device validation.
 
 Do not connect to a discovered IP address merely because its TCP port is open. Do not treat Lockdown TCP port 62078 as a general-purpose first-pairing interface. Remote Pairing and ordinary Lockdown pairing are distinct protocols and must not be conflated.
