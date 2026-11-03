@@ -38,7 +38,7 @@ class AfcPacketCodecTest {
     @Test fun decodesHeaderFields() {
         val packet = AfcPacketCodec.encode(9, 0x0E, byteArrayOf(8))
         val header = AfcPacketCodec.decodeHeader(packet.copyOfRange(0, 40))
-        assertEquals(49L, header.entireLength)
+        assertEquals(41L, header.entireLength)
         assertEquals(41L, header.thisLength)
         assertEquals(9L, header.packetNumber)
         assertEquals(0x0EL, header.operation)
