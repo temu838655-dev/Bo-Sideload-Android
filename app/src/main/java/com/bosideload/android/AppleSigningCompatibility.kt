@@ -118,7 +118,9 @@ internal object AppleSigningCompatibility {
         require(p12File.isFile && p12File.length() in 1..MAX_CREDENTIAL_BYTES) {
             "P12 không tồn tại, rỗng hoặc vượt giới hạn 10 MB."
         }
-        require(profileFiles.isNotEmpty() && profileFiles.all { it.isFile && it.length() in 1..MAX_CREDENTIAL_BYTES }) {
+        require(profileFiles.size in 1..MAX_PROFILE_COUNT &&
+            profileFiles.all { it.isFile && it.length() in 1..MAX_CREDENTIAL_BYTES } &&
+            profileFiles.sumOf { it.length() } <= MAX_TOTAL_PROFILE_BYTES) {
             "Danh sách provisioning profile rỗng hoặc có tệp không hợp lệ/vượt giới hạn 10 MB."
         }
         val metadata = readIpaMetadata(ipaFile)
@@ -345,6 +347,8 @@ internal object AppleSigningCompatibility {
 
     private const val MAX_IPA_BYTES = 2L * 1024L * 1024L * 1024L
     private const val MAX_CREDENTIAL_BYTES = 10L * 1024L * 1024L
+    private const val MAX_PROFILE_COUNT = 10
+    private const val MAX_TOTAL_PROFILE_BYTES = 50L * 1024L * 1024L
     private const val MAX_ARCHIVE_ENTRIES = 100_000
     private const val MAX_NESTED_PLIST_BYTES = 1024 * 1024
     private val APP_INFO_PLIST_PATTERN = Regex("^Payload/[^/]+\\.app/Info\\.plist$")
