@@ -122,10 +122,14 @@ internal object AppleSigningCompatibility {
         }
         val baseCheck = check(metadata, profile, certificates, now, targetUdid)
         val nestedBundles = inspectNestedCodeBundles(ipaFile)
-        if (nestedBundles.isEmpty()) {
-            return baseCheck
-        }
+        return rejectUnsupportedNestedBundles(baseCheck, nestedBundles)
+    }
 
+    internal fun rejectUnsupportedNestedBundles(
+        baseCheck: Check,
+        nestedBundles: List<NestedBundleInfo>
+    ): Check {
+        if (nestedBundles.isEmpty()) return baseCheck
         val bundleSummary = nestedBundles.joinToString("; ") { bundle ->
             "${bundle.bundleId ?: "không đọc được Bundle ID"} (${bundle.path})"
         }
