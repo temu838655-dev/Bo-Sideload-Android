@@ -17,7 +17,8 @@ internal object AppleSigningCompatibility {
         ipa: IpaPlistReader.Metadata,
         profile: AppleProvisioningProfileReader.ProfileInfo,
         certificates: List<AppleP12Reader.EntryInfo>,
-        now: Date = Date()
+        now: Date = Date(),
+        targetUdid: String? = null
     ): Check {
         val errors = mutableListOf<String>()
         val warnings = mutableListOf<String>()
@@ -70,10 +71,20 @@ internal object AppleSigningCompatibility {
             }
         }
 
-        if (profile.provisionedDevices.isEmpty() && !profile.provisionsAllDevices) {
-            warnings += "Profile không liệt kê thiết bị cụ thể và không bật All Devices; chưa xác nhận được thiết bị đích có được cấp quyền."
-        } else {
-            warnings += "Chưa kiểm tra UDID thiết bị đích vì Bo Sideload chưa đọc được UDID iPhone qua Lockdown."
+        when (isDeviceProvisioned(
+            profile.provisionedDevices,
+            profile.provisionsAllDevices,
+            targetUdid
+        )) {
+            true -> Unit
+            false -> errors += "UDID iPhone không nằm trong danh sách thiết bị được cấp quyền của provisioning profile."
+            null -> warnings += if (profile.provisionsAllDevices) {
+                "Profile bật All Devices; không cần đối chiếu UDID cụ thể."
+            } else if (profile.provisionedDevices.isEmpty()) {
+                "Profile không liệt kê thiết bị cụ thể và không bật All Devices; chưa xác nhận được thiết bị đích."
+            } else {
+                "Chưa có UDID iPhone để đối chiếu với danh sách thiết bị trong profile."
+            }
         }
 
         if (profile.teamIdentifiers.isEmpty()) {
@@ -88,7 +99,8 @@ internal object AppleSigningCompatibility {
         p12File: java.io.File,
         profileFile: java.io.File,
         password: String,
-        now: Date = Date()
+        now: Date = Date(),
+        targetUdid: String? = null
     ): Check {
         require(ipaFile.isFile && ipaFile.length() in 1..MAX_IPA_BYTES) {
             "IPA không tồn tại, rỗng hoặc vượt giới hạn 2 GB."
@@ -108,7 +120,7 @@ internal object AppleSigningCompatibility {
         } finally {
             passwordChars.fill(0.toChar())
         }
-        return check(metadata, profile, certificates, now)
+        return check(metadata, profile, certificates, now, targetUdid)
     }
 
     private fun readIpaMetadata(file: java.io.File): IpaPlistReader.Metadata? {
@@ -145,6 +157,21 @@ internal object AppleSigningCompatibility {
         if (separator <= 0) return false
         val prefix = applicationIdentifier.substring(0, separator)
         return prefix in teamIdentifiers || prefix in applicationIdentifierPrefixes
+    }
+
+    /**
+     * Returns true/false when eligibility can be determined, or null when the
+     * profile/device data is insufficient. Enterprise profiles bypass UDID lists.
+     */
+    internal fun isDeviceProvisioned(
+        provisionedDevices: List<String>,
+        provisionsAllDevices: Boolean,
+        targetUdid: String?
+    ): Boolean? {
+        if (provisionsAllDevices) return true
+        if (provisionedDevices.isEmpty()) return null
+        val udid = targetUdid?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        return provisionedDevices.any { it.trim().equals(udid, ignoreCase = true) }
     }
 
     internal fun isCertificateValidAt(notBefore: Date, notAfter: Date, now: Date): Boolean =
