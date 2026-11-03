@@ -141,15 +141,15 @@ class DeviceConnectionActivity : Activity() {
                                 card.addView(TextView(this@DeviceConnectionActivity).apply {
                                     text = buildString {
                                         append("Dịch vụ Bonjour: ${device.serviceName}")
-                                        append("\\nĐịa chỉ mạng: ${device.hostAddress}:${device.port}")
+                                        append("\nĐịa chỉ mạng: ${device.hostAddress}:${device.port}")
                                         if (match != null) {
-                                            append("\\nĐÃ KHỚP pairing record: ${match.deviceId}")
-                                            append("\\nĐã xác định ứng viên theo authTag; vẫn phải xác thực TLS trước khi truyền dữ liệu.")
+                                            append("\nĐÃ KHỚP pairing record: ${match.deviceId}")
+                                            append("\nĐã xác định ứng viên theo authTag; vẫn phải xác thực TLS trước khi truyền dữ liệu.")
                                         } else {
-                                            append("\\nCHƯA KHỚP pairing record đã lưu.")
-                                            append("\\nKhông kết nối đến dịch vụ này và không gửi thông tin pairing.")
+                                            append("\nCHƯA KHỚP pairing record đã lưu.")
+                                            append("\nKhông kết nối đến dịch vụ này và không gửi thông tin pairing.")
                                         }
-                                        append("\\nTXT identifier: ${if (device.txtRecord.containsKey("identifier")) "có" else "thiếu"}")
+                                        append("\nTXT identifier: ${if (device.txtRecord.containsKey("identifier")) "có" else "thiếu"}")
                                     }
                                     textSize = 13f
                                     setTextColor(-1)
@@ -316,10 +316,10 @@ class DeviceConnectionActivity : Activity() {
                                     runOnUiThread {
                                         status.text = buildString {
                                             append("usbmux báo thiết bị Attached. DeviceID: ").append(deviceInfo.deviceId)
-                                            deviceInfo.serialNumber?.let { append("\\nSerial: ").append(it) }
-                                            deviceInfo.connectionType?.let { append("\\nKiểu kết nối: ").append(it) }
-                                            deviceInfo.productId?.let { append("\\nProduct ID: ").append(hex(it.toInt())) }
-                                            append("\\nĐây chưa phải xác nhận Lockdown pairing.")
+                                            deviceInfo.serialNumber?.let { append("\nSerial: ").append(it) }
+                                            deviceInfo.connectionType?.let { append("\nKiểu kết nối: ").append(it) }
+                                            deviceInfo.productId?.let { append("\nProduct ID: ").append(hex(it.toInt())) }
+                                            append("\nĐây chưa phải xác nhận Lockdown pairing.")
                                         }
                                         // Keep the Android USB device that owns this usbmux
                                         // interface; Lockdown pairing and IPA installation
