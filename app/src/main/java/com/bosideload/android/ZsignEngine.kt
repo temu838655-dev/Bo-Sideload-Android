@@ -80,19 +80,30 @@ internal class ZsignEngine(private val context: Context) {
 
             if (exitCode == 0 && outputExists) {
                 val verification = SignedIpaVerifier.verify(inputIpa, outputIpa)
-                if (verification.valid) {
-                    SignResult(
-                        true,
-                        outputIpa,
-                        "zsign đã tạo IPA và kiểm tra cấu trúc đầu ra đạt. ${verification.message}\n$details"
-                    )
-                } else {
+                if (!verification.valid) {
                     outputIpa.delete()
                     SignResult(
                         false,
                         null,
-                        "zsign trả mã thành công nhưng IPA đầu ra không vượt qua kiểm tra hậu ký: ${verification.message}\n$details"
+                        "zsign trả mã thành công nhưng IPA đầu ra không vượt qua kiểm tra cấu trúc: ${verification.message}\\n$details"
                     )
+                } else {
+                    val certificateCheck = checkSignedCertificate(binary, outputIpa)
+                    if (!certificateCheck.valid) {
+                        outputIpa.delete()
+                        SignResult(
+                            false,
+                            null,
+                            "IPA được tạo nhưng kiểm tra certificate/OCSP không đạt: ${certificateCheck.message}\\n$details"
+                        )
+                    } else {
+                        SignResult(
+                            true,
+                            outputIpa,
+                            "IPA đã vượt qua kiểm tra cấu trúc. ${verification.message}\\n" +
+                                "KIỂM TRA CERTIFICATE: ${certificateCheck.message}\\n$details"
+                        )
+                    }
                 }
             } else {
                 outputIpa.delete()
