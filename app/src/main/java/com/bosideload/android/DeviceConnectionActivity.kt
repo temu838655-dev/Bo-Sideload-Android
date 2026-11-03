@@ -107,7 +107,7 @@ class DeviceConnectionActivity : Activity() {
             setPadding(0, dp(20), 0, dp(6))
         })
         root.addView(TextView(this).apply {
-            text = "Đang phát triển kết nối không dây đúng giao thức Apple: tự tìm iPhone qua Bonjour/mDNS, ghép đôi Remote Pairing trên iOS 27 trở lên và tạo đường hầm bảo mật để truyền/cài IPA. Với iPhone đã ghép đôi qua USB và bật Wi-Fi Sync, ứng dụng cũng sẽ hỗ trợ kết nối lại qua mạng khi thiết bị cho phép.\n\nBản hiện tại chưa bật cài IPA qua Wi-Fi. Không nhập IP/cổng 62078 để ghép đôi mới: kết nối Lockdown trực tiếp không thay thế quy trình Remote Pairing."
+            text = "Kết nối Wi-Fi hiện hỗ trợ iPhone đã ghép đôi trước đó và bật Wi-Fi Sync: ứng dụng tìm thiết bị qua Bonjour/mDNS, đối chiếu authTag với pairing record đã lưu, sau đó yêu cầu bạn xác thực Lockdown TLS trước khi truyền IPA đã ký.\\n\\nĐây là đường tương thích Lockdown Wi-Fi Sync cũ, không phải Apple RemotePairing/CoreDevice. Ghép đôi mới qua RemotePairing/RSD chưa được triển khai; cài đặt Wi-Fi vẫn cần kiểm thử trên iPhone thật."
             textSize = 13f
             setTextColor(0xFFFFD18A.toInt())
             setPadding(0, dp(6), 0, dp(10))
