@@ -76,3 +76,10 @@ Descriptor matching was checked against the upstream usbmuxd interface definitio
 `LockdownRequests` now builds XML-plist envelopes for the non-mutating `QueryType` and `GetValue` requests, plus a `StartSession` request when the caller supplies HostID and SystemBUID. `LockdownResponseParser` distinguishes successful replies from explicit Lockdown errors and preserves Value, SessionID, and EnableSessionSSL fields. Unit tests cover request fields, selector validation, session identifiers, and error replies.
 
 This is protocol serialization only. It does not generate host certificates/private keys, send a Pair request, store a pairing record, perform TLS session negotiation, or establish a trusted Lockdown connection. Do not send StartSession until a valid pairing record and correct host identifiers have been obtained through Apple's normal trust workflow. Binary plist and date support remain outstanding.
+
+
+### Lockdown framed session channel
+
+`LockdownSessionChannel` now provides a synchronous request/response exchange over an already-open byte stream. It validates that outgoing payloads are plist dictionaries containing a Request name, applies the bounded 4-byte big-endian framing, parses the reply, preserves explicit Lockdown failures, and rejects a reply whose Request name conflicts with the outstanding request. Unit tests cover successful exchange, explicit service errors, mismatched replies, malformed requests, and use after close.
+
+This channel is not yet connected to the Android USBMux transport and does not create the Lockdown service socket. It must only be used after the service connection and normal Apple trust/pairing workflow are implemented. It does not enable StartSession, TLS, Installation Proxy, or IPA installation by itself.
