@@ -22,6 +22,7 @@ class DeviceConnectionActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var devicesPanel: LinearLayout
     private lateinit var pairButton: Button
+    private lateinit var installButton: Button
     private var attachedAppleDevice: UsbDevice? = null
     private var attachedUsbmuxDeviceId: Long? = null
     private var attachedDeviceSerial: String? = null
@@ -99,6 +100,13 @@ class DeviceConnectionActivity : Activity() {
             setOnClickListener { startApplePairing() }
         }
         root.addView(pairButton)
+        installButton = Button(this).apply {
+            text = "Cài IPA đã ký lên iPhone"
+            isAllCaps = false
+            isEnabled = false
+            setOnClickListener { startIpaInstallation() }
+        }
+        root.addView(installButton)
         root.addView(Button(this).apply {
             text = "Chia sẻ báo cáo USB"
             isAllCaps = false
@@ -224,12 +232,7 @@ class DeviceConnectionActivity : Activity() {
                                         }
                                         attachedUsbmuxDeviceId = deviceInfo.deviceId
                                         attachedDeviceSerial = deviceInfo.serialNumber
-                                        pairButton.isEnabled = !pairingInProgress && !deviceInfo.serialNumber.isNullOrBlank()
-                                        pairButton.text = if (deviceInfo.serialNumber.isNullOrBlank()) {
-                                            "Không có UDID — chưa thể ghép đôi"
-                                        } else {
-                                            "Ghép đôi iPhone (Lockdown)"
-                                        }
+                                        updatePairingActions(deviceInfo.serialNumber)
                                     }
                                 }
                                 override fun onDeviceDetached(deviceId: Long) {
@@ -239,6 +242,7 @@ class DeviceConnectionActivity : Activity() {
                                             attachedUsbmuxDeviceId = null
                                             attachedDeviceSerial = null
                                             pairButton.isEnabled = false
+                                            installButton.isEnabled = false
                                         }
                                     }
                                 }
@@ -284,6 +288,111 @@ class DeviceConnectionActivity : Activity() {
         }
     }
 
+
+
+    private fun updatePairingActions(serial: String?) {
+        val paired = !serial.isNullOrBlank() && runCatching {
+            EncryptedPairRecordStore(this).load(serial) != null
+        }.getOrDefault(false)
+        pairButton.text = when {
+            serial.isNullOrBlank() -> "Không có UDID — chưa thể ghép đôi"
+            paired -> "Đã ghép đôi • Ghép lại nếu cần"
+            else -> "Ghép đôi iPhone (Lockdown)"
+        }
+        pairButton.isEnabled = !pairingInProgress && !serial.isNullOrBlank()
+        val signedFile = signedIpaFile()
+        installButton.isEnabled = paired && signedFile != null &&
+            signedFile.isFile && signedFile.canRead() && signedFile.length() > 0
+        installButton.text = when {
+            signedFile == null -> "Quay lại màn hình chính để chọn IPA đã ký"
+            !signedFile.isFile -> "Không tìm thấy IPA tạm — hãy ký lại"
+            !paired -> "Ghép đôi iPhone trước khi cài IPA"
+            else -> "Cài IPA đã ký lên iPhone"
+        }
+    }
+
+    private fun signedIpaFile(): java.io.File? =
+        intent.getStringExtra(EXTRA_SIGNED_IPA_PATH)?.let { java.io.File(it) }
+
+    private fun startIpaInstallation() {
+        val usbDevice = attachedAppleDevice
+        val usbmuxDeviceId = attachedUsbmuxDeviceId
+        val serial = attachedDeviceSerial
+        val ipaFile = signedIpaFile()
+        if (usbDevice == null || usbmuxDeviceId == null || serial.isNullOrBlank()) {
+            status.text = "Chưa có iPhone Attached từ usbmux. Hãy cắm cáp, mở khóa iPhone và theo dõi usbmux."
+            return
+        }
+        if (ipaFile == null || !ipaFile.isFile || !ipaFile.canRead() || ipaFile.length() <= 0) {
+            status.text = "Không tìm thấy IPA đã ký trong bộ nhớ tạm. Hãy quay lại ký IPA."
+            return
+        }
+        if (ipaFile.length() > MAX_INSTALL_IPA_BYTES) {
+            status.text = "IPA vượt giới hạn 512 MB."
+            return
+        }
+        if (pairingInProgress) return
+
+        pairingInProgress = true
+        pairButton.isEnabled = false
+        installButton.isEnabled = false
+        installButton.text = "Đang cài đặt…"
+        status.text = "Đang xác thực phiên Lockdown với hồ sơ ghép đôi đã lưu…"
+        activeMonitor?.close()
+        activeMonitor = null
+        activeMonitorDeviceId = null
+
+        Thread({
+            try {
+                val record = EncryptedPairRecordStore(this).load(serial)
+                    ?: throw IllegalStateException("iPhone chưa có hồ sơ ghép đôi. Hãy ghép đôi trước.")
+                val transport = AndroidUsbMuxTransport.open(usbManager, usbDevice)
+                val connect = UsbMuxConnectSession.connect(
+                    transport = transport,
+                    deviceId = usbmuxDeviceId,
+                    devicePort = UsbMuxConnectSession.LOCKDOWN_PORT
+                )
+                LockdownTlsSession.start(connect, record).use { lockdown ->
+                    val coordinator = SideloadInstallCoordinator(
+                        lockdownChannel = lockdown.channel,
+                        deviceId = usbmuxDeviceId,
+                        pairRecord = record,
+                        newTransport = { AndroidUsbMuxTransport.open(usbManager, usbDevice) }
+                    )
+                    ipaFile.inputStream().use { input ->
+                        coordinator.install(
+                            ipaInput = input,
+                            ipaSizeBytes = ipaFile.length()
+                        ) { progress ->
+                            runOnUiThread {
+                                status.text = when (progress.stage) {
+                                    SideloadInstallCoordinator.Stage.UPLOADING_IPA ->
+                                        "Đang tải IPA lên iPhone: ${progress.bytesTransferred ?: 0} / ${progress.totalBytes ?: 0} byte"
+                                    SideloadInstallCoordinator.Stage.INSTALLING_APP ->
+                                        "Đang cài ứng dụng: ${progress.installPercent ?: 0}% — ${progress.message}"
+                                    SideloadInstallCoordinator.Stage.COMPLETE ->
+                                        progress.message
+                                }
+                            }
+                        }
+                    }
+                }
+                runOnUiThread {
+                    pairingInProgress = false
+                    updatePairingActions(serial)
+                    status.text = "✓ iPhone đã báo cài đặt hoàn tất. Nếu ứng dụng chưa xuất hiện, kiểm tra thông báo iOS và trạng thái chứng chỉ."
+                    diagnosticReport += "\\n\\nInstallation Proxy: hoàn tất theo phản hồi của iPhone; IPA=${ipaFile.name}."
+                }
+            } catch (error: Exception) {
+                runOnUiThread {
+                    pairingInProgress = false
+                    updatePairingActions(serial)
+                    status.text = "Cài IPA thất bại: ${error.message ?: "lỗi không xác định"}. Kiểm tra cáp, mở khóa iPhone, hồ sơ Tin cậy và provisioning profile."
+                    diagnosticReport += "\\n\\nCài IPA thất bại: ${error.message}"
+                }
+            }
+        }, "BoSideload-install-ipa").apply { isDaemon = true; start() }
+    }
 
     /**
      * Performs the ordinary Apple Lockdown Pair exchange after usbmux Listen
@@ -337,6 +446,7 @@ class DeviceConnectionActivity : Activity() {
                 }
                 runOnUiThread {
                     pairingInProgress = false
+                    updatePairingActions(serial)
                     pairButton.text = "Đã ghép đôi • Ghép lại"
                     pairButton.isEnabled = true
                     status.text = "Ghép đôi Lockdown thành công. Hồ sơ tin cậy đã được mã hóa trong Android Keystore. Nếu iPhone hiện hộp thoại Tin cậy, hãy xác nhận trên iPhone."
@@ -380,5 +490,9 @@ class DeviceConnectionActivity : Activity() {
     private fun hex(value: Int): String = "0x" + value.toString(16).uppercase().padStart(4, '0')
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
-    companion object { private const val APPLE_VENDOR_ID = 0x05AC }
+    companion object {
+        const val EXTRA_SIGNED_IPA_PATH = "com.bosideload.android.extra.SIGNED_IPA_PATH"
+        private const val MAX_INSTALL_IPA_BYTES = 512L * 1024L * 1024L
+        private const val APPLE_VENDOR_ID = 0x05AC
+    }
 }
