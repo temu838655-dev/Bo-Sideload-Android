@@ -7,6 +7,8 @@ import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.nio.charset.StandardCharsets
+import java.time.Instant
+import java.util.Date
 
 class LockdownPlistCodecTest {
     @Test
@@ -85,5 +87,24 @@ class LockdownPlistCodecTest {
         assertThrows(IllegalArgumentException::class.java) {
             LockdownPlistCodec.decode(xml.toByteArray())
         }
+    }
+    @Test
+    fun decodesBinaryApplePropertyList() {
+        val encoded = java.util.Base64.getDecoder().decode(
+            "YnBsaXN0MDDVAQIDBAUGBwgJClVDb3VudFdFbmFibGVkV1BheWxvYWRXUmVxdWVzdFVWYWx1ZRAHCUIBAllRdWVyeVR5cGVfEBljb20uYXBwbGUubW9iaWxlLmxvY2tkb3duCBMZISkxNzk6PUcAAAAAAAABAQAAAAAAAAALAAAAAAAAAAAAAAAAAAAAYw=="
+        )
+        val decoded = LockdownPlistCodec.decode(encoded)
+        assertEquals("QueryType", decoded["Request"])
+        assertEquals("com.apple.mobile.lockdown", decoded["Value"])
+        assertEquals(7L, decoded["Count"])
+        assertEquals(true, decoded["Enabled"])
+        assertArrayEquals(byteArrayOf(1, 2), decoded["Payload"] as ByteArray)
+    }
+
+    @Test
+    fun roundTripsDateValuesInXmlPlists() {
+        val date = Date.from(Instant.parse("2026-11-03T12:34:56Z"))
+        val decoded = LockdownPlistCodec.decode(LockdownPlistCodec.encode(mapOf("Date" to date)))
+        assertEquals(date, decoded["Date"])
     }
 }
