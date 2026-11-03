@@ -44,7 +44,7 @@ internal class AndroidUsbMuxTransport private constructor(
     }
 
     @Throws(IOException::class)
-    override fun readPacket(maxPacketSize: Long = UsbMuxPacketHeader.DEFAULT_MAX_PACKET_SIZE): UsbMuxPacketCodec.Packet {
+    override fun readPacket(maxPacketSize: Long): UsbMuxPacketCodec.Packet {
         checkOpen()
         require(maxPacketSize in UsbMuxPacketHeader.HEADER_SIZE.toLong()..Int.MAX_VALUE.toLong()) {
             "invalid maximum packet size"
