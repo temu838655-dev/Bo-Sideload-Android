@@ -143,7 +143,7 @@ class DeviceConnectionActivity : Activity() {
                                         append("Dịch vụ Bonjour: ${device.serviceName}")
                                         append("\nĐịa chỉ mạng: ${device.hostAddress}:${device.port}")
                                         if (match != null) {
-                                            append("\nĐÃ KHỚP pairing record: ${match.deviceId}")
+                                            append("\nĐÃ KHỚP AUTH TAG (ỨNG VIÊN): ${match.deviceId}")
                                             append("\nĐã xác định ứng viên theo authTag; vẫn phải xác thực TLS trước khi truyền dữ liệu.")
                                         } else {
                                             append("\nCHƯA KHỚP pairing record đã lưu.")
@@ -156,7 +156,7 @@ class DeviceConnectionActivity : Activity() {
                                 })
                                 wifiDevicesPanel.addView(card, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
                                 status.text = if (match != null) {
-                                    "Đã khớp quảng bá Wi-Fi với pairing record đã lưu. Bước xác thực TLS chưa được thực hiện."
+                                    "Đã khớp authTag với pairing record. Đây mới là ứng viên; xác thực TLS chưa được thực hiện."
                                 } else {
                                     "Đã thấy dịch vụ Apple nhưng chưa khớp pairing record. Ứng dụng sẽ không kết nối."
                                 }
