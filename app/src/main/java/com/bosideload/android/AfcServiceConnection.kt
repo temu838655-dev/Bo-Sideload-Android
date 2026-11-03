@@ -67,13 +67,17 @@ internal class PairedServiceTlsSocket private constructor(
             validatePairedServiceCertificates(rootCertificate, hostCertificate, deviceCertificate)
             val hostPrivateKey = parsePrivateKey(record.hostKeyMaterial)
             verifyPairedHostPrivateKeyMatchesCertificate(hostPrivateKey, hostCertificate)
+            val rootPrivateKey = parsePrivateKey(record.rootKeyMaterial)
+            verifyPairedRootPrivateKeyMatchesCertificate(rootPrivateKey, rootCertificate)
             val identity = KeyStore.getInstance(KeyStore.getDefaultType()).apply {
                 load(null)
+                // libimobiledevice's OpenSSL backend uses the paired RootCertificate
+                // and RootPrivateKey as the Apple TLS client identity.
                 setKeyEntry(
-                    "bo-service-host",
-                    hostPrivateKey,
+                    "bo-service-root",
+                    rootPrivateKey,
                     CharArray(0),
-                    arrayOf(hostCertificate, rootCertificate)
+                    arrayOf(rootCertificate)
                 )
             }
             val keyManagers = KeyManagerFactory.getInstance(
@@ -210,6 +214,34 @@ internal fun verifyPairedHostPrivateKeyMatchesCertificate(
         throw error
     } catch (error: Exception) {
         throw IOException("Could not validate the paired host key and certificate", error)
+    }
+}
+
+/**
+ * Confirms that the saved pairing root private key belongs to RootCertificate.
+ */
+@Throws(IOException::class)
+internal fun verifyPairedRootPrivateKeyMatchesCertificate(
+    privateKey: PrivateKey,
+    certificate: X509Certificate
+) {
+    try {
+        val challenge = ByteArray(32).also { java.security.SecureRandom().nextBytes(it) }
+        val signer = java.security.Signature.getInstance("SHA256withRSA")
+        signer.initSign(privateKey)
+        signer.update(challenge)
+        val signed = signer.sign()
+
+        val verifier = java.security.Signature.getInstance("SHA256withRSA")
+        verifier.initVerify(certificate.publicKey)
+        verifier.update(challenge)
+        if (!verifier.verify(signed)) {
+            throw IOException("Paired root private key does not match RootCertificate")
+        }
+    } catch (error: IOException) {
+        throw error
+    } catch (error: Exception) {
+        throw IOException("Could not validate the paired root key and certificate", error)
     }
 }
 
