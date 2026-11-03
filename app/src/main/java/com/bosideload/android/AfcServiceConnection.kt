@@ -102,11 +102,7 @@ internal class PairedServiceTlsSocket private constructor(
                     if (chain.isNullOrEmpty()) {
                         throw java.security.cert.CertificateException("service supplied no peer certificate")
                     }
-                    val expected = fingerprint(deviceCertificate)
-                    if (chain.none { fingerprint(it) == expected }) {
-                        throw java.security.cert.CertificateException("service certificate does not match paired iPhone")
-                    }
-                    deviceCertificate.checkValidity()
+                    verifyPinnedServicePeerCertificate(chain, deviceCertificate)
                 }
             }
             return SSLContext.getInstance("TLS").apply {
@@ -297,4 +293,29 @@ internal fun validatePairedServiceCertificates(
     } catch (error: Exception) {
         throw IOException("Pair record certificates are not valid under the saved root certificate", error)
     }
+}
+
+
+/**
+ * Pins the TLS peer leaf to the exact DeviceCertificate saved during pairing.
+ * A matching certificate elsewhere in the chain is not sufficient: otherwise
+ * an untrusted leaf could be accepted merely by including the pinned cert as
+ * an issuer or unrelated chain element.
+ */
+@Throws(java.security.cert.CertificateException::class)
+internal fun verifyPinnedServicePeerCertificate(
+    chain: Array<out X509Certificate>,
+    expectedDeviceCertificate: X509Certificate
+) {
+    if (chain.isEmpty()) {
+        throw java.security.cert.CertificateException("service supplied no peer certificate")
+    }
+    val actualLeaf = MessageDigest.getInstance("SHA-256").digest(chain[0].encoded)
+    val expectedLeaf = MessageDigest.getInstance("SHA-256").digest(expectedDeviceCertificate.encoded)
+    if (!MessageDigest.isEqual(actualLeaf, expectedLeaf)) {
+        throw java.security.cert.CertificateException(
+            "service leaf certificate does not match paired iPhone DeviceCertificate"
+        )
+    }
+    expectedDeviceCertificate.checkValidity()
 }
