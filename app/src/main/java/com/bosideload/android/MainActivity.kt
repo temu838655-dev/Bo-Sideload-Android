@@ -163,7 +163,7 @@ class MainActivity : Activity() {
             setPadding(0, dp(28), 0, dp(12))
         }, fullWidth())
         page.addView(label(
-            "Bộ ký: zsign Android 1.1.3 (MIT), chạy cục bộ. Có thể ký lại IPA bằng P12 và provisioning profile. Việc ký không đồng nghĩa iPhone chắc chắn cài được. Đã có màn hình dò USB, xin quyền Android và thử gửi usbmux Listen để nhận sự kiện thiết bị. Chưa có ghép đôi Lockdown đáng tin cậy, kết nối Wi-Fi hoặc cài IPA trực tiếp lên iPhone.",
+            "Bộ ký: zsign Android 1.1.3 (MIT), chạy cục bộ. Có thể ký IPA bằng P12 và provisioning profile; hồ sơ Lockdown được lưu mã hóa và luồng cài qua USB đã được nối vào giao diện. Kết quả cài còn phụ thuộc iOS, chứng chỉ, provisioning profile và cần kiểm tra trên iPhone thật. Chưa hỗ trợ cài qua Wi-Fi.",
             12f, secondaryText, false
         ).apply { setPadding(dp(4), dp(8), dp(4), 0) }, fullWidth())
         setContentView(scroll)
@@ -332,6 +332,10 @@ class MainActivity : Activity() {
             if (requestCode == CREATE_SIGNED_IPA) {
                 pendingSignedFile?.delete()
                 pendingSignedFile = null
+                if (::installSignedButton.isInitialized) {
+                    installSignedButton.isEnabled = false
+                    installSignedButton.visibility = android.view.View.GONE
+                }
                 if (::signingStatus.isInitialized) {
                     signingStatus.text = "Đã hủy lưu IPA. Tệp tạm đã được xóa."
                 }
