@@ -149,6 +149,27 @@ class MachOInspectorTest {
     }
 
     @Test
+    fun rejectsCodeDirectoryIdentifierWithoutNullTerminator() {
+        val bytes = thinMachO(includeSignature = true)
+        val codeDirectory = 48 + 20
+        bytes[codeDirectory + 44] = 'X'.code.toByte()
+        val result = MachOInspector.inspect(bytes)
+        assertTrue(result.isMachO)
+        assertFalse(result.hasCodeDirectory)
+    }
+
+    @Test
+    fun rejectsCodeDirectoryIdentifierOverlappingSpecialSlotHashes() {
+        val seal = "signed resource seal".toByteArray()
+        val bytes = thinMachO(includeSignature = true, resourceSealBytes = seal)
+        val codeDirectory = 48 + 20
+        putBe(bytes, codeDirectory + 20, 45)
+        val result = MachOInspector.inspect(bytes, resourceSealBytes = seal)
+        assertTrue(result.isMachO)
+        assertFalse(result.hasCodeDirectory)
+    }
+
+    @Test
     fun rejectsCodeDirectoryOutsideSuperBlob() {
         val bytes = thinMachO(includeSignature = true)
         val signatureStart = 48
