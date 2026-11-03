@@ -27,6 +27,7 @@ class DeviceConnectionActivity : Activity() {
     private var activeWifiDiscovery: WifiAppleDeviceDiscovery? = null
     @Volatile private var activeWifiLockdownSession: LockdownTlsSession? = null
     @Volatile private var activeWifiLockdownDeviceId: String? = null
+    @Volatile private var activeWifiServiceName: String? = null
     private lateinit var pairButton: Button
     private lateinit var installButton: Button
     private var attachedAppleDevice: UsbDevice? = null
@@ -185,6 +186,7 @@ class DeviceConnectionActivity : Activity() {
                                                         activeWifiLockdownSession?.close()
                                                         activeWifiLockdownSession = authenticated
                                                         activeWifiLockdownDeviceId = match.deviceId
+                                                        activeWifiServiceName = device.serviceName
                                                         text = "Đã xác thực TLS"
                                                         wifiInstallButton?.isEnabled = true
                                                         status.text = "Đã xác thực Lockdown TLS với iPhone qua Wi-Fi. Phiên đã sẵn sàng; chọn “Cài IPA qua Wi-Fi” để gửi IPA đã ký từ màn hình chính."
@@ -271,6 +273,14 @@ class DeviceConnectionActivity : Activity() {
                                         wifiDevicesPanel.removeViewAt(index)
                                     }
                                 }
+                                // Do not keep an install session alive after its Bonjour device disappears.
+                                if (activeWifiServiceName == serviceName) {
+                                    activeWifiLockdownSession?.close()
+                                    activeWifiLockdownSession = null
+                                    activeWifiLockdownDeviceId = null
+                                    activeWifiServiceName = null
+                                    status.text = "iPhone đã rời mạng Wi-Fi hoặc tắt Wi-Fi Sync. Phiên kết nối đã đóng; hãy quét và xác thực lại."
+                                }
                             }
                         }
                     })
@@ -335,6 +345,7 @@ class DeviceConnectionActivity : Activity() {
         activeWifiLockdownSession?.close()
         activeWifiLockdownSession = null
         activeWifiLockdownDeviceId = null
+        activeWifiServiceName = null
         attachedAppleDevice = null
         super.onDestroy()
     }
