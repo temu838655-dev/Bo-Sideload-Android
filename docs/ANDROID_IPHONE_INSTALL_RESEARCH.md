@@ -88,3 +88,10 @@ This channel is not yet connected to the Android USBMux transport and does not c
 ### Binary plist and date support
 
 The Lockdown plist decoder now detects Apple's `bplist00` signature and uses the already bundled dd-plist parser for binary input. Parsed Java values are normalized into dictionaries/lists and supported scalar types, including byte arrays and dates, with depth and node-count checks. XML date values are also decoded and encoded. A fixed binary fixture and date round-trip tests were added. This improves compatibility with Lockdown replies that use binary plist or date fields, but does not change the trust or installation status: no physical device exchange, Pair flow, TLS session, or IPA installation has been validated.
+
+ 
+### Encrypted pairing-record storage groundwork
+
+A versioned pairing-record model and bounded serializer have been added. The Android storage layer encrypts the serialized record with a per-device AES-256-GCM key held by Android Keystore; the key is non-exportable, the device identifier is authenticated as GCM additional data, and only the IV plus ciphertext is stored in private app preferences. Removing a record also removes its Keystore alias. If the Keystore key is missing or authentication fails, the store reports an error rather than silently accepting or replacing the record.
+
+This is storage infrastructure only. The application does not yet generate Apple's required certificates, send a Pair request, receive a real PairRecord, or use this store in a completed pairing flow. The record model must be populated only from a successful, user-approved Apple pairing exchange. No pairing bypass is implemented.
