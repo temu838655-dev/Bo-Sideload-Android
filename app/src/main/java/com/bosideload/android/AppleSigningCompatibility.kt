@@ -147,10 +147,10 @@ internal object AppleSigningCompatibility {
             val bundleMetadata = metadata.copy(bundleId = assignment.bundleId)
             val result = check(bundleMetadata, profile, certificates, now, targetUdid)
             if (result.errors.isNotEmpty()) {
-                errors += result.errors.map { "${assignment.bundleId}: ${'$'}it" }
+                errors += result.errors.map { "${assignment.bundleId}: $it" }
             }
             if (result.warnings.isNotEmpty()) {
-                warnings += result.warnings.map { "${assignment.bundleId}: ${'$'}it" }
+                warnings += result.warnings.map { "${assignment.bundleId}: $it" }
             }
         }
         return Check(
