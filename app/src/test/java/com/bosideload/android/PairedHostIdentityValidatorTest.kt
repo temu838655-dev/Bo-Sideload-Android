@@ -53,6 +53,18 @@ class PairedHostIdentityValidatorTest {
     }
 
     @Test
+    fun rejectsCertificateWithMismatchedIssuerNameEvenWhenSignatureIsValid() {
+        val root = createIdentity()
+        val wrongIssuer = X500Name("CN=Unrelated Issuer")
+        val host = createIdentity(issuer = root, certificateIssuerName = wrongIssuer)
+        val device = createIdentity(issuer = root)
+
+        assertThrows(IOException::class.java) {
+            validatePairedServiceCertificates(root.certificate, host.certificate, device.certificate)
+        }
+    }
+
+    @Test
     fun rejectsExpiredDeviceCertificate() {
         val root = createIdentity()
         val host = createIdentity(root)
@@ -74,6 +86,7 @@ class PairedHostIdentityValidatorTest {
 
     private fun createIdentity(
         issuer: TestIdentity? = null,
+        certificateIssuerName: X500Name? = null,
         notBefore: Date = Date(System.currentTimeMillis() - 60_000),
         notAfter: Date = Date(System.currentTimeMillis() + 86_400_000)
     ): TestIdentity {
@@ -81,7 +94,7 @@ class PairedHostIdentityValidatorTest {
         val pair: KeyPair = generator.generateKeyPair()
         val issuerIdentity = issuer
         val subject = X500Name("CN=Bo Sideload TLS Test ${System.nanoTime()}")
-        val issuerName = issuerIdentity?.certificate?.subjectX500Principal
+        val issuerName = certificateIssuerName ?: issuerIdentity?.certificate?.subjectX500Principal
             ?.let { X500Name.getInstance(it.encoded) } ?: subject
         val signingKey = issuerIdentity?.privateKey ?: pair.private
         val builder = JcaX509v3CertificateBuilder(
