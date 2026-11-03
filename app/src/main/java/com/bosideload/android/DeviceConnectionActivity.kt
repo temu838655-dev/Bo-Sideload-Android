@@ -21,6 +21,11 @@ class DeviceConnectionActivity : Activity() {
     private lateinit var usbManager: UsbManager
     private lateinit var status: TextView
     private lateinit var devicesPanel: LinearLayout
+    private lateinit var pairButton: Button
+    private var attachedAppleDevice: UsbDevice? = null
+    private var attachedUsbmuxDeviceId: Long? = null
+    private var attachedDeviceSerial: String? = null
+    private var pairingInProgress = false
     private var diagnosticReport: String = "Chưa có dữ liệu USB."
     private var pendingPermissionDeviceId: Int? = null
     private var activeMonitor: UsbMuxDeviceMonitor? = null
@@ -87,6 +92,13 @@ class DeviceConnectionActivity : Activity() {
         })
         devicesPanel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(devicesPanel)
+        pairButton = Button(this).apply {
+            text = "Ghép đôi iPhone (Lockdown)"
+            isAllCaps = false
+            isEnabled = false
+            setOnClickListener { startApplePairing() }
+        }
+        root.addView(pairButton)
         root.addView(Button(this).apply {
             text = "Chia sẻ báo cáo USB"
             isAllCaps = false
@@ -117,6 +129,7 @@ class DeviceConnectionActivity : Activity() {
         activeMonitor?.close()
         activeMonitor = null
         activeMonitorDeviceId = null
+        attachedAppleDevice = null
         super.onDestroy()
     }
 
@@ -130,6 +143,7 @@ class DeviceConnectionActivity : Activity() {
         }
         devices.forEach { device ->
             val apple = device.vendorId == APPLE_VENDOR_ID
+            if (apple && usbManager.hasPermission(device)) attachedAppleDevice = device
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 setPadding(dp(14), dp(12), dp(14), dp(12))
@@ -202,10 +216,25 @@ class DeviceConnectionActivity : Activity() {
                                             deviceInfo.productId?.let { append("\\nProduct ID: ").append(hex(it.toInt())) }
                                             append("\\nĐây chưa phải xác nhận Lockdown pairing.")
                                         }
+                                        attachedUsbmuxDeviceId = deviceInfo.deviceId
+                                        attachedDeviceSerial = deviceInfo.serialNumber
+                                        pairButton.isEnabled = !pairingInProgress && !deviceInfo.serialNumber.isNullOrBlank()
+                                        pairButton.text = if (deviceInfo.serialNumber.isNullOrBlank()) {
+                                            "Không có UDID — chưa thể ghép đôi"
+                                        } else {
+                                            "Ghép đôi iPhone (Lockdown)"
+                                        }
                                     }
                                 }
                                 override fun onDeviceDetached(deviceId: Long) {
-                                    runOnUiThread { status.text = "usbmux báo thiết bị Detached (DeviceID=$deviceId)." }
+                                    runOnUiThread {
+                                        status.text = "usbmux báo thiết bị Detached (DeviceID=$deviceId)."
+                                        if (attachedUsbmuxDeviceId == deviceId) {
+                                            attachedUsbmuxDeviceId = null
+                                            attachedDeviceSerial = null
+                                            pairButton.isEnabled = false
+                                        }
+                                    }
                                 }
                                 override fun onError(message: String) {
                                     runOnUiThread { status.text = "Không thể kết nối usbmux: $message" }
@@ -247,6 +276,76 @@ class DeviceConnectionActivity : Activity() {
         } else {
             "Có USB nhưng không thấy VID Apple (05AC). Kiểm tra thiết bị, cáp và OTG."
         }
+    }
+
+
+    /**
+     * Performs the ordinary Apple Lockdown Pair exchange after usbmux Listen
+     * has supplied a device ID and UDID. The USB monitor is stopped first so
+     * the same Android USB interface is not claimed by two transports.
+     */
+    private fun startApplePairing() {
+        val usbDevice = attachedAppleDevice
+        val usbmuxDeviceId = attachedUsbmuxDeviceId
+        val serial = attachedDeviceSerial
+        if (usbDevice == null || usbmuxDeviceId == null || serial.isNullOrBlank()) {
+            status.text = "Chưa có iPhone Attached kèm UDID từ usbmux. Hãy mở khóa iPhone và thử lại."
+            pairButton.isEnabled = false
+            return
+        }
+        if (!usbManager.hasPermission(usbDevice)) {
+            status.text = "Quyền USB đã mất. Hãy cấp quyền USB lại trước khi ghép đôi."
+            pairButton.isEnabled = false
+            return
+        }
+        if (pairingInProgress) return
+
+        pairingInProgress = true
+        pairButton.isEnabled = false
+        pairButton.text = "Đang ghép đôi…"
+        status.text = "Đang dừng usbmux Listen và mở kênh Lockdown. Hãy giữ iPhone mở khóa."
+        activeMonitor?.close()
+        activeMonitor = null
+        activeMonitorDeviceId = null
+
+        Thread({
+            try {
+                val transport = AndroidUsbMuxTransport.open(usbManager, usbDevice)
+                val connect = UsbMuxConnectSession.connect(
+                    transport = transport,
+                    deviceId = usbmuxDeviceId,
+                    devicePort = UsbMuxConnectSession.LOCKDOWN_PORT
+                )
+                val systemBuid = PairingIdentityStore(this).getOrCreateSystemBuid()
+                val hostId = java.util.UUID.randomUUID().toString().uppercase(java.util.Locale.ROOT)
+                val store = EncryptedPairRecordStore(this)
+                connect.use { session ->
+                    LockdownSessionChannel(session.inputStream, session.outputStream).use { channel ->
+                        AppleLockdownPairingClient { record -> store.save(record) }.pair(
+                            channel = channel,
+                            deviceId = serial,
+                            systemBuid = systemBuid,
+                            hostId = hostId
+                        )
+                    }
+                }
+                runOnUiThread {
+                    pairingInProgress = false
+                    pairButton.text = "Đã ghép đôi • Ghép lại"
+                    pairButton.isEnabled = true
+                    status.text = "Ghép đôi Lockdown thành công. Hồ sơ tin cậy đã được mã hóa trong Android Keystore. Nếu iPhone hiện hộp thoại Tin cậy, hãy xác nhận trên iPhone."
+                    diagnosticReport += "\\n\\nLockdown Pair: thành công; UDID=$serial; hồ sơ được lưu mã hóa."
+                }
+            } catch (error: Exception) {
+                runOnUiThread {
+                    pairingInProgress = false
+                    pairButton.text = "Thử ghép đôi lại"
+                    pairButton.isEnabled = attachedUsbmuxDeviceId != null && !attachedDeviceSerial.isNullOrBlank()
+                    status.text = "Ghép đôi Lockdown thất bại: ${error.message ?: "lỗi không xác định"}. Hãy mở khóa iPhone, xác nhận Tin cậy và thử lại."
+                    diagnosticReport += "\\n\\nLockdown Pair thất bại: ${error.message}"
+                }
+            }
+        }, "BoSideload-lockdown-pair").apply { isDaemon = true; start() }
     }
 
     private fun shareDiagnosticReport() {
