@@ -1,6 +1,11 @@
 package com.bosideload.android
 
+import org.bouncycastle.asn1.ASN1Primitive
+import org.bouncycastle.asn1.DERNull
 import org.bouncycastle.asn1.x500.X500Name
+import org.bouncycastle.asn1.x509.AlgorithmIdentifier
+import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers
+import org.bouncycastle.asn1.pkcs.RSAPublicKey
 import org.bouncycastle.asn1.x509.BasicConstraints
 import org.bouncycastle.asn1.x509.Extension
 import org.bouncycastle.asn1.x509.KeyUsage
@@ -147,6 +152,12 @@ internal object ApplePairingMaterialGenerator {
             return when (parsed) {
                 is org.bouncycastle.asn1.x509.SubjectPublicKeyInfo -> converter.getPublicKey(parsed)
                 is org.bouncycastle.openssl.PEMKeyPair -> converter.getKeyPair(parsed).public
+                is RSAPublicKey -> converter.getPublicKey(
+                    org.bouncycastle.asn1.x509.SubjectPublicKeyInfo(
+                        AlgorithmIdentifier(PKCSObjectIdentifiers.rsaEncryption, DERNull.INSTANCE),
+                        parsed
+                    )
+                )
                 else -> throw IllegalArgumentException("unsupported DevicePublicKey PEM object")
             }
         }
