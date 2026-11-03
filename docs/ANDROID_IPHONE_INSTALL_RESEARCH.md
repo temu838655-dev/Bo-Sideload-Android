@@ -52,3 +52,10 @@ This remains a serialization layer only. It does not send a Lockdown request, au
 `UsbMuxPlistRequests` now builds protocol-v1 plist packets for `Listen` and `Connect`, including client metadata fields used by libusbmuxd. Connect validates the device ID and TCP port and applies the required `htons`-style byte swap to `PortNumber`. Unit tests decode the generated plist payloads and verify the packet message type and tag.
 
 This still does not open the Android USB interface, parse usbmux responses/device attach events, or connect to a device port. The request builders must be integrated with a real Android USB Host transport and tested against physical iPhones before the connection UI can be considered functional.
+
+
+### usbmux response parsing groundwork
+
+`UsbMuxResponseParser` now validates plist packet message type and parses `Result`, `Attached`, and `Detached` messages. Attached-device metadata is read from the Properties dictionary with optional serial number, connection type, and product ID. Unknown message types are preserved rather than treated as successful connections. Unit tests cover success, attach/detach, unknown messages, optional metadata, and malformed responses.
+
+This parser is not yet connected to a live USB stream. The next gate is Android USB bulk endpoint I/O with permission/lifecycle handling, then a physical-device test of Listen events. Do not treat a parsed Attached message as proof of Lockdown pairing or installation capability.
