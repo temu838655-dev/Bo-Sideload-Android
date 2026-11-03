@@ -2,6 +2,7 @@ package com.bosideload.android
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -49,6 +50,6 @@ class InstallationProxyPathValidationTest {
         // EOF is expected from the empty fake device stream. An operation-lock
         // error here would mean validation incorrectly left the client busy.
         assertEquals(true, error.message!!.contains("incomplete property-list service packet"))
-        assertEquals(1, output.size().let { if (it > 0) 1 else 0 })
+        assertTrue(output.size() > 0)
     }
 }
