@@ -5,7 +5,6 @@ import java.io.ByteArrayOutputStream
 import java.security.KeyFactory
 import java.security.KeyStore
 import java.security.MessageDigest
-import java.security.Security
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
 import java.security.spec.PKCS8EncodedKeySpec
@@ -32,10 +31,10 @@ internal object AppleP12Exporter {
                 "Chứng chỉ không khớp với khóa ký được tạo trên thiết bị."
             }
 
-            if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
-                Security.addProvider(BouncyCastleProvider())
-            }
-            val store = KeyStore.getInstance("PKCS12", BouncyCastleProvider.PROVIDER_NAME)
+            // Use this library instance directly instead of Android's platform BC provider,
+            // whose supported keystore algorithms can differ by OS release.
+            val provider = BouncyCastleProvider()
+            val store = KeyStore.getInstance("PKCS12", provider)
             store.load(null, password)
             store.setKeyEntry(
                 "bo-sideload-ios-signing",
