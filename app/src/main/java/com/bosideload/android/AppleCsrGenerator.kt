@@ -1,6 +1,5 @@
 package com.bosideload.android
 
-import android.util.Base64
 import org.bouncycastle.asn1.x500.X500Name
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.bouncycastle.openssl.jcajce.JcaPEMWriter
@@ -39,8 +38,8 @@ internal object AppleCsrGenerator {
 
         return Generated(
             AppleConnectCredentialVault.SigningMaterial(
-                privateKeyPkcs8Base64 = Base64.encodeToString(pair.private.encoded, Base64.NO_WRAP),
-                publicKeyX509Base64 = Base64.encodeToString(pair.public.encoded, Base64.NO_WRAP),
+                privateKeyPkcs8Base64 = java.util.Base64.getEncoder().encodeToString(pair.private.encoded),
+                publicKeyX509Base64 = java.util.Base64.getEncoder().encodeToString(pair.public.encoded),
                 csrPem = output.toString()
             )
         )
