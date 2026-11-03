@@ -36,7 +36,7 @@ class DeviceConnectionActivity : Activity() {
                     intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
                 }
                 // Ignore stale or unrelated permission broadcasts.
-                if (resultDevice != null && resultDevice.deviceId != requestedId) return
+                if (resultDevice == null || resultDevice.deviceId != requestedId) return
                 val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
                 pendingPermissionDeviceId = null
                 refreshDevices()
