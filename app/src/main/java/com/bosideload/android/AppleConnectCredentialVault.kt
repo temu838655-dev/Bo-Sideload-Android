@@ -80,6 +80,48 @@ internal class AppleConnectCredentialVault(context: Context) {
         } finally { clear.fill(0) }
     }
 
+    data class IssuedCertificate(
+        val certificateId: String,
+        val certificateType: String,
+        val expirationDate: String,
+        val certificateDerBase64: String
+    )
+
+    /** Persist an Apple-issued public certificate; the private key remains separately encrypted. */
+    fun saveIssuedCertificate(certificate: IssuedCertificate) {
+        val clear = JSONObject()
+            .put("id", certificate.certificateId)
+            .put("type", certificate.certificateType)
+            .put("expiry", certificate.expirationDate)
+            .put("der", certificate.certificateDerBase64)
+            .toString().toByteArray(StandardCharsets.UTF_8)
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.ENCRYPT_MODE, key())
+        val encrypted = cipher.doFinal(clear)
+        prefs.edit()
+            .putString("certificate_iv", Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
+            .putString("certificate_data", Base64.encodeToString(encrypted, Base64.NO_WRAP))
+            .apply()
+        clear.fill(0)
+    }
+
+    fun loadIssuedCertificate(): IssuedCertificate? {
+        val iv = prefs.getString("certificate_iv", null) ?: return null
+        val data = prefs.getString("certificate_data", null) ?: return null
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, Base64.decode(iv, Base64.NO_WRAP)))
+        val clear = cipher.doFinal(Base64.decode(data, Base64.NO_WRAP))
+        return try {
+            val json = JSONObject(String(clear, StandardCharsets.UTF_8))
+            IssuedCertificate(
+                json.getString("id"),
+                json.getString("type"),
+                json.optString("expiry", ""),
+                json.getString("der")
+            )
+        } finally { clear.fill(0) }
+    }
+
     fun clear() {
         prefs.edit().clear().apply()
         runCatching {
