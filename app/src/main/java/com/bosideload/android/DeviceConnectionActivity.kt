@@ -357,7 +357,7 @@ class DeviceConnectionActivity : Activity() {
                         lockdownChannel = lockdown.channel,
                         deviceId = usbmuxDeviceId,
                         pairRecord = record,
-                        newTransport = { AndroidUsbMuxTransport.open(usbManager, usbDevice) }
+                        newTransport = { AndroidUsbMuxTransport.open(usbManager, usbDevice, timeoutMs = SERVICE_IO_TIMEOUT_MS) }
                     )
                     ipaFile.inputStream().use { input ->
                         coordinator.install(
@@ -493,6 +493,7 @@ class DeviceConnectionActivity : Activity() {
     companion object {
         const val EXTRA_SIGNED_IPA_PATH = "com.bosideload.android.extra.SIGNED_IPA_PATH"
         private const val MAX_INSTALL_IPA_BYTES = 512L * 1024L * 1024L
+        private const val SERVICE_IO_TIMEOUT_MS = 120_000
         private const val APPLE_VENDOR_ID = 0x05AC
     }
 }
