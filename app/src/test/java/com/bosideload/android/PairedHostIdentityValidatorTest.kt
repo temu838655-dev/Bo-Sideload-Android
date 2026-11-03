@@ -35,6 +35,22 @@ class PairedHostIdentityValidatorTest {
     }
 
     @Test
+    fun acceptsPrivateKeyThatMatchesPairingRootCertificate() {
+        val root = createIdentity()
+        verifyPairedRootPrivateKeyMatchesCertificate(root.privateKey, root.certificate)
+    }
+
+    @Test
+    fun rejectsPrivateKeyThatDoesNotMatchPairingRootCertificate() {
+        val root = createIdentity()
+        val unrelated = createIdentity()
+
+        assertThrows(IOException::class.java) {
+            verifyPairedRootPrivateKeyMatchesCertificate(unrelated.privateKey, root.certificate)
+        }
+    }
+
+    @Test
     fun acceptsHostAndDeviceCertificatesSignedBySavedRoot() {
         val root = createIdentity()
         val host = createIdentity(root)
