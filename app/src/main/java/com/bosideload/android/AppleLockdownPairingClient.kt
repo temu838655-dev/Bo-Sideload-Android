@@ -35,10 +35,10 @@ internal class AppleLockdownPairingClient(
         }
         val lockdownUdid = (udidSuccess.value as? String)?.trim()
             ?: throw IOException("Lockdown UniqueDeviceID was missing or had an unsupported type")
-        if (!isPlausibleUdid(lockdowmUdid)) {
+        if (!isPlausibleUdid(lockdownUdid)) {
             throw IOException("Lockdown returned an invalid UniqueDeviceID")
         }
-        if (!lockdowmUdid.equals(deviceId.trim(), ignoreCase = true)) {
+        if (!lockdownUdid.equals(deviceId.trim(), ignoreCase = true)) {
             throw IOException("USB serial does not match the iPhone UDID reported by Lockdown; reconnect the correct device")
         }
 
