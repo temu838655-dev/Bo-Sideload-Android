@@ -1,7 +1,7 @@
 package com.bosideload.android
 
 import org.bouncycastle.asn1.pkcs.PrivateKeyInfo
-import org.bouncycastle.asn1.x509.X509CertificateHolder
+import org.bouncycastle.cert.X509CertificateHolder
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter
 import org.bouncycastle.openssl.PEMParser
 import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter
