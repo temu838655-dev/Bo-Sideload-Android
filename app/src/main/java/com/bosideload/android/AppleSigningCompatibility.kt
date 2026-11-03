@@ -122,21 +122,21 @@ internal object AppleSigningCompatibility {
         }
         val baseCheck = check(metadata, profile, certificates, now, targetUdid)
         val nestedBundles = inspectNestedCodeBundles(ipaFile)
-        return if (nestedBundles.isEmpty()) {
-            baseCheck
-        } else {
-            val bundleSummary = nestedBundles.joinToString("; ") { bundle ->
-                "${bundle.bundleId ?: "không đọc được Bundle ID"} (${bundle.path})"
-            }
-            baseCheck.copy(
-                warnings = baseCheck.warnings + listOf(
-                    "Phát hiện ${nestedBundles.size} app extension/Watch bundle: $bundleSummary. " +
-                        "Bản hiện tại chỉ nhận một provisioning profile qua giao diện ký; chưa chọn và đối chiếu profile riêng cho từng Bundle ID. " +
-                        "zsign có thể xử lý nhiều profile qua nhiều tham số -m, nhưng Bo Sideload chưa cung cấp luồng đó. " +
-                        "Không nên coi IPA này đã sẵn sàng cài đặt cho đến khi từng bundle được ký đúng profile và kiểm thử trên thiết bị."
-                )
-            )
+        if (nestedBundles.isEmpty()) {
+            return baseCheck
         }
+
+        val bundleSummary = nestedBundles.joinToString("; ") { bundle ->
+            "${bundle.bundleId ?: "không đọc được Bundle ID"} (${bundle.path})"
+        }
+        val nestedError = "Không thể ký an toàn IPA này: phát hiện ${nestedBundles.size} app extension/Watch bundle: $bundleSummary. " +
+            "Giao diện hiện chỉ nhận một provisioning profile và chưa hỗ trợ chọn, đối chiếu, truyền nhiều profile -m cho từng Bundle ID. " +
+            "Để tránh tạo IPA có extension chưa được ký đúng, thao tác ký bị chặn. Hãy dùng IPA không có nested executable bundle hoặc chờ bản hỗ trợ nhiều profile."
+        return baseCheck.copy(
+            compatible = false,
+            errors = baseCheck.errors + nestedError,
+            warnings = baseCheck.warnings
+        )
     }
 
     private fun readIpaMetadata(file: java.io.File): IpaPlistReader.Metadata? {
