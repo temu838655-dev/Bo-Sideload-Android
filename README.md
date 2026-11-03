@@ -7,6 +7,7 @@ Bo Sideload is an Android app for inspecting IPA packages and re-signing them lo
 - Open IPA files with Android's document picker and inspect ZIP paths, archive safety, app metadata, Bundle ID and common signing files.
 - Keep a recent IPA list and export/share files.
 - Select a P12 signing identity and provisioning profile; enter the P12 password for that signing operation only.
+- Before launching zsign, the app exports the single P12 identity to short-lived PEM files inside its private cache directory and invokes zsign with `-k` + `-c`; the P12 password is not placed in the native process argument list. The unencrypted private-key file is restricted to the app UID and deleted after signing, with stale temporary directories cleaned on a later run.
 - Run zsign locally on Android and export the signed IPA.
 - Preflight-check Bundle ID, profile prefix, platform, expiry, certificate fingerprint/private-key availability and (when a verified device UDID is available) device authorization.
 - Detect nested `.appex` and Watch app bundles, read each Bundle ID, and allow selecting multiple provisioning profiles. Preflight maps profiles to the main app and nested bundles by `application-identifier`, validates each selected profile against the P12 certificate and target UDID, rejects missing/ambiguous/unused profiles, and passes the resolved profiles to zsign using repeated `-m` arguments. This is compatibility checking, not full Apple CMS trust-chain verification; validate resulting IPAs on a real iPhone.
@@ -32,7 +33,7 @@ Bo Sideload is an Android app for inspecting IPA packages and re-signing them lo
 ## Important security boundaries
 
 - The app does not bypass the iPhone's trust prompt or provisioning restrictions.
-- Pairing private material is stored only in the encrypted local pairing record; P12 passwords are not stored in history or preferences.
+- Pairing private material is stored only in the encrypted local pairing record; P12 passwords are not stored in history or preferences or passed in zsign process arguments. The signing adapter briefly writes an unencrypted private-key PEM to app-private cache storage because upstream zsign v1.1.3 has no documented environment/stdin password channel; the file is removed after the operation. Android app sandboxing protects it from other ordinary apps, but this is still temporary plaintext key material and is not equivalent to hardware-backed signing.
 - Provisioning-profile preflight is a compatibility check, not a complete Apple CMS trust-chain or revocation validation.
 - Do not share diagnostic reports or pairing files publicly; diagnostic reports should not contain private keys, but can include device identifiers.
 - The Swift workspace is a lightweight text editor. Android does not include Apple's proprietary Xcode, iOS SDK or macOS build environment, so this app cannot compile a full native iOS project into an IPA.
