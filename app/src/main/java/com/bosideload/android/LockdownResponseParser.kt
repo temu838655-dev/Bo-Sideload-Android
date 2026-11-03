@@ -10,7 +10,8 @@ internal object LockdownResponseParser {
             val request: String?,
             val value: Any?,
             val sessionId: String?,
-            val enableSessionSsl: Boolean?
+            val enableSessionSsl: Boolean?,
+            val escrowBag: ByteArray?
         ) : Response()
         data class Failure(
             val request: String?,
@@ -36,7 +37,8 @@ internal object LockdownResponseParser {
             request = request,
             value = message["Value"],
             sessionId = sessionId,
-            enableSessionSsl = ssl
+            enableSessionSsl = ssl,
+            escrowBag = message["EscrowBag"] as? ByteArray
         )
     }
 }
