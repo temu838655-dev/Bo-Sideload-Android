@@ -156,7 +156,7 @@ class AfcClientTest {
         assertEquals(listOf(0x08L), requestOperations(wire))
         val header = AfcPacketCodec.decodeHeader(wire.copyOfRange(0, AfcPacketCodec.HEADER_SIZE))
         val body = wire.copyOfRange(AfcPacketCodec.HEADER_SIZE, header.entireLength.toInt())
-        assertEquals(remotePath + "\\u0000", String(body, Charsets.UTF_8))
+        assertEquals(remotePath + String(byteArrayOf(0), Charsets.UTF_8), String(body, Charsets.UTF_8))
     }
 
     @Test
