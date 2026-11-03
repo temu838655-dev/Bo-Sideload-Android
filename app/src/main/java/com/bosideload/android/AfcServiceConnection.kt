@@ -36,17 +36,26 @@ internal class PairedServiceTlsSocket private constructor(
     companion object {
         @Throws(IOException::class)
         fun upgrade(connectSession: UsbMuxConnectSession, record: PairRecord): PairedServiceTlsSocket {
-            record.validate()
             val transportSocket = StreamBackedSocket(
                 connectSession.inputStream,
                 connectSession.outputStream
             ) { connectSession.close() }
+            return upgrade(transportSocket, record)
+        }
+
+        /**
+         * Upgrades an already-connected TCP service socket. Used by legacy
+         * Apple Wi-Fi Sync after Lockdown StartService returns its service port.
+         */
+        @Throws(IOException::class)
+        fun upgrade(transportSocket: Socket, record: PairRecord): PairedServiceTlsSocket {
+            record.validate()
             try {
                 val context = createContext(record)
                 val ssl = context.socketFactory.createSocket(
                     transportSocket,
                     "paired-apple-service",
-                    0,
+                    transportSocket.port,
                     true
                 ) as SSLSocket
                 ssl.useClientMode = true
