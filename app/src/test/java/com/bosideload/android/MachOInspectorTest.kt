@@ -160,6 +160,49 @@ class MachOInspectorTest {
     }
 
     @Test
+    fun rejectsCodeDirectoryOverlappingSuperBlobIndexTable() {
+        val bytes = thinMachO(includeSignature = true)
+        // The embedded-signature index table ends at relative offset 20.
+        putBe(bytes, 48 + 16, 16)
+        val result = MachOInspector.inspect(bytes)
+        assertTrue(result.isMachO)
+        assertFalse(result.hasCodeDirectory)
+    }
+
+    @Test
+    fun rejectsOverlappingEmbeddedSignatureBlobs() {
+        val bytes = thinMachOWithEntitlements(entitlementBlob())
+        val superBlob = 48
+        val entitlementIndex = superBlob + 20
+        // Point the entitlement blob into the middle of the CodeDirectory blob.
+        putBe(bytes, entitlementIndex + 4, 100)
+        val result = MachOInspector.inspect(bytes)
+        assertTrue(result.isMachO)
+        assertFalse(result.hasCodeDirectory)
+    }
+
+    @Test
+    fun rejectsDuplicateEmbeddedSignatureSlotTypes() {
+        val bytes = thinMachOWithEntitlements(entitlementBlob())
+        val superBlob = 48
+        // Both index entries now claim CSSLOT_CODEDIRECTORY.
+        putBe(bytes, superBlob + 20, 0)
+        val result = MachOInspector.inspect(bytes)
+        assertTrue(result.isMachO)
+        assertFalse(result.hasCodeDirectory)
+    }
+
+    @Test
+    fun rejectsEmbeddedSignatureBlobLengthOutsideSuperBlob() {
+        val bytes = thinMachO(includeSignature = true)
+        val codeDirectory = 48 + 20
+        putBe(bytes, codeDirectory + 4, 0x7fffffff)
+        val result = MachOInspector.inspect(bytes)
+        assertTrue(result.isMachO)
+        assertFalse(result.hasCodeDirectory)
+    }
+
+    @Test
     fun detectsFatMachOWithSignedSlice() {
         val slice = thinMachO(includeSignature = true)
         val offset = 28
