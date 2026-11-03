@@ -101,6 +101,15 @@ internal object AppleSigningCompatibility {
         password: String,
         now: Date = Date(),
         targetUdid: String? = null
+    ): Check = preflight(ipaFile, p12File, listOf(profileFile), password, now, targetUdid)
+
+    fun preflight(
+        ipaFile: java.io.File,
+        p12File: java.io.File,
+        profileFiles: List<java.io.File>,
+        password: String,
+        now: Date = Date(),
+        targetUdid: String? = null
     ): Check {
         require(ipaFile.isFile && ipaFile.length() in 1..MAX_IPA_BYTES) {
             "IPA không tồn tại, rỗng hoặc vượt giới hạn 2 GB."
@@ -108,23 +117,71 @@ internal object AppleSigningCompatibility {
         require(p12File.isFile && p12File.length() in 1..MAX_CREDENTIAL_BYTES) {
             "P12 không tồn tại, rỗng hoặc vượt giới hạn 10 MB."
         }
-        require(profileFile.isFile && profileFile.length() in 1..MAX_CREDENTIAL_BYTES) {
-            "Provisioning profile không tồn tại, rỗng hoặc vượt giới hạn 10 MB."
+        require(profileFiles.isNotEmpty() && profileFiles.all { it.isFile && it.length() in 1..MAX_CREDENTIAL_BYTES }) {
+            "Danh sách provisioning profile rỗng hoặc có tệp không hợp lệ/vượt giới hạn 10 MB."
         }
         val metadata = readIpaMetadata(ipaFile)
             ?: return Check(false, listOf("Không đọc được Info.plist / CFBundleIdentifier từ IPA."), emptyList())
-        val profile = AppleProvisioningProfileReader.read(profileFile.readBytes())
+        val nestedBundles = inspectNestedCodeBundles(ipaFile)
+        val bundleIds = listOfNotNull(metadata.bundleId) + nestedBundles.mapNotNull { it.bundleId }
+        val errors = mutableListOf<String>()
+        val warnings = mutableListOf<String>()
+        if (metadata.bundleId.isNullOrBlank()) errors += "Ứng dụng chính không có CFBundleIdentifier."
+        nestedBundles.filter { it.bundleId.isNullOrBlank() }.forEach {
+            errors += "Không đọc được Bundle ID của bundle lồng: ${'$'}{it.path}"
+        }
+        val profiles = profileFiles.map { AppleProvisioningProfileReader.read(it.readBytes()) }
+        val resolution = resolveProfileAssignments(bundleIds, profiles)
+        errors += resolution.errors
         val passwordChars = password.toCharArray()
         val certificates = try {
             AppleP12Reader.read(p12File.readBytes(), passwordChars)
         } finally {
             passwordChars.fill(0.toChar())
         }
-        val baseCheck = check(metadata, profile, certificates, now, targetUdid)
-        val nestedBundles = inspectNestedCodeBundles(ipaFile)
-        return rejectUnsupportedNestedBundles(baseCheck, nestedBundles)
+        resolution.assignments.forEach { assignment ->
+            val profile = profiles[assignment.profileIndex]
+            val bundleMetadata = metadata.copy(bundleId = assignment.bundleId)
+            val result = check(bundleMetadata, profile, certificates, now, targetUdid)
+            if (result.errors.isNotEmpty()) {
+                errors += result.errors.map { "${'$'}{assignment.bundleId}: ${'$'}it" }
+            }
+            if (result.warnings.isNotEmpty()) {
+                warnings += result.warnings.map { "${'$'}{assignment.bundleId}: ${'$'}it" }
+            }
+        }
+        return Check(errors.isEmpty(), errors.distinct(), warnings.distinct())
     }
 
+    internal data class ProfileAssignment(val bundleId: String, val profileIndex: Int)
+    internal data class ProfileResolution(val assignments: List<ProfileAssignment>, val errors: List<String>)
+
+    internal fun resolveProfileAssignments(
+        bundleIds: List<String>,
+        profiles: List<AppleProvisioningProfileReader.ProfileInfo>
+    ): ProfileResolution {
+        val assignments = mutableListOf<ProfileAssignment>()
+        val errors = mutableListOf<String>()
+        if (bundleIds.isEmpty()) {
+            return ProfileResolution(emptyList(), listOf("Không tìm thấy Bundle ID để ghép provisioning profile."))
+        }
+        bundleIds.forEach { bundleId ->
+            val candidates = profiles.indices.filter { index ->
+                val applicationId = profiles[index].teamBundleIdentifier
+                !applicationId.isNullOrBlank() && matchesApplicationIdentifier(applicationId, bundleId)
+            }
+            when (candidates.size) {
+                0 -> errors += "Không có provisioning profile phù hợp Bundle ID $bundleId."
+                1 -> assignments += ProfileAssignment(bundleId, candidates.single())
+                else -> errors += "Có nhiều provisioning profile cùng khớp Bundle ID $bundleId; hãy bỏ lựa chọn trùng/không rõ ràng."
+            }
+        }
+        val used = assignments.map { it.profileIndex }.toSet()
+        profiles.indices.filter { it !in used }.forEach {
+            errors += "Provisioning profile thứ ${'$'}{it + 1} không được ghép với bundle nào trong IPA."
+        }
+        return ProfileResolution(assignments, errors)
+    }
     internal fun rejectUnsupportedNestedBundles(
         baseCheck: Check,
         nestedBundles: List<NestedBundleInfo>
