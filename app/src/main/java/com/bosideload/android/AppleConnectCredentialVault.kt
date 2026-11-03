@@ -120,8 +120,11 @@ internal object AppleConnectJwt {
 
 internal object AppleConnectApi {
     data class Result(val ok: Boolean, val message: String)
+
+    /** Read-only Apple Certificates request; never creates or revokes resources. */
     fun validate(c: AppleConnectCredentialVault.Credentials): Result {
-        val path = "/v1/certificates?limit=1"
+        val query = "?limit=50&fields%5Bcertificates%5D=displayName%2CcertificateType%2CserialNumber%2Cplatform%2CexpirationDate%2Cactivated"
+        val path = "/v1/certificates" + query
         val conn = URL("https://api.appstoreconnect.apple.com" + path).openConnection() as HttpsURLConnection
         return try {
             conn.requestMethod = "GET"
@@ -133,9 +136,33 @@ internal object AppleConnectApi {
             val stream = if (code in 200..299) conn.inputStream else conn.errorStream
             val body = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
             when (code) {
-                in 200..299 -> Result(true, "Apple chấp nhận Team API Key. Kết nối thành công; chưa tạo hoặc sửa tài nguyên nào.")
+                in 200..299 -> {
+                    val data = org.json.JSONObject(body).optJSONArray("data")
+                    val count = data?.length() ?: 0
+                    val lines = mutableListOf<String>()
+                    for (i in 0 until minOf(count, 20)) {
+                        val item = data?.optJSONObject(i) ?: continue
+                        val attrs = item.optJSONObject("attributes") ?: continue
+                        val name = attrs.optString("displayName").takeIf { it.isNotBlank() }
+                            ?: attrs.optString("name").takeIf { it.isNotBlank() }
+                            ?: "Certificate " + (i + 1)
+                        val type = attrs.optString("certificateType", "UNKNOWN")
+                        val platform = attrs.optString("platform", "không rõ nền tảng")
+                        val expiry = attrs.optString("expirationDate", "không rõ hạn")
+                        val active = if (attrs.has("activated")) attrs.optBoolean("activated") else true
+                        lines += "• " + name + " — " + type + " — " + platform +
+                            " — hết hạn: " + expiry + " — " + if (active) "đang hoạt động" else "không hoạt động"
+                    }
+                    val summary = if (lines.isEmpty()) {
+                        "Apple chấp nhận Team API Key và cho phép đọc Certificates. Hiện API không trả certificate nào trong danh sách."
+                    } else {
+                        "Apple chấp nhận Team API Key. Đọc được " + count +
+                            " certificate (hiển thị tối đa 20):\n" + lines.joinToString("\n")
+                    }
+                    Result(true, summary + "\n\nĐây chỉ là kiểm tra/đọc dữ liệu; chưa tạo, thu hồi hoặc sửa tài nguyên.")
+                }
                 401 -> Result(false, "HTTP 401: kiểm tra Key ID, Issuer ID và tệp .p8 có thuộc cùng một key.")
-                403 -> Result(false, "HTTP 403: key thiếu quyền hoặc là Individual API Key. Provisioning endpoints cần Team API Key.")
+                403 -> Result(false, "HTTP 403: key thiếu quyền hoặc là Individual API Key. Cần Team API Key có quyền Certificates, Identifiers & Profiles.")
                 429 -> Result(false, "HTTP 429: Apple đang giới hạn tần suất. Hãy thử lại sau.")
                 else -> Result(false, "Apple API trả HTTP " + code + ". " + body.take(400))
             }
