@@ -20,7 +20,7 @@ Bo Sideload is an Android app for inspecting IPA packages and re-signing them lo
 ## Signing and installation requirements
 
 - Supply a valid P12 certificate/private key and provisioning profile that authorize the app's Bundle ID, entitlements, signing identity and target device.
-- A free Apple Account / Personal Team has Apple's own limits and expiry rules. Bo Sideload does not create Apple-issued certificates or profiles, authenticate to Apple, bypass signing rules, or remove Apple's device authorization requirements.
+- A free Apple Account / Personal Team has Apple's own limits and expiry rules. Bo Sideload does not bypass signing rules or remove Apple's device authorization requirements. The current in-app Apple automation uses the official App Store Connect Team API and requires a paid Apple Developer Program membership plus a Team API key; it is not an Apple ID/password sign-in flow.
 - A successful zsign operation means an output IPA was generated; it does not guarantee that iOS will accept or launch it.
 - USB installation requires a compatible OTG/data cable, Android USB permission, an unlocked iPhone, an accepted Apple trust/pairing record, and a profile that authorizes the target device.
 - The USB pairing and installation implementation is present in the app, but it has **not yet been validated end-to-end on a physical Android + iPhone combination**. GitHub Actions success proves compilation and automated tests only; it does not prove real-device USB compatibility or successful installation. Treat the feature as experimental until that test is completed.
@@ -29,6 +29,15 @@ Bo Sideload is an Android app for inspecting IPA packages and re-signing them lo
 - Wi-Fi now includes Bonjour discovery, authTag candidate matching, user-triggered Lockdown TLS authentication, a Wi-Fi IPA-install button, reusable TCP service connections, paired service-TLS handling, and an AFC → Installation Proxy coordinator. The button uses the already-selected signed IPA. This source path has passed Android CI but has **not** been validated end-to-end on physical iPhone hardware; treat Wi-Fi installation as experimental until that test succeeds.
 - CoreDevice RemotePairing/RSD remains separate and is not implemented.
 - Supported native signing-engine ABIs: `arm64-v8a` and `armeabi-v7a`.
+
+## Apple account and certificate automation
+
+- The **Apple ID** button opens Apple's official account website in the browser. Bo Sideload never asks for or stores an Apple ID password or 2FA code.
+- The in-app **Apple Developer • Team API** screen is a separate integration. It accepts a Team API key file (`.p8`), Key ID and Issuer ID, stores the key material encrypted with Android Keystore, and validates API access with Apple.
+- Apple Developer certificate, device registration and provisioning-profile operations require an eligible paid Apple Developer Program team and a Team API key with the required access to Certificates, Identifiers & Profiles. An Individual API key is not sufficient for these provisioning endpoints.
+- A free Apple Account / Personal Team does not provide this Team API automation. Apple's normal free Personal Team provisioning workflow requires Apple's supported Xcode/macOS workflow; this Android app does not claim to create free Personal Team certificates or profiles automatically.
+- Never enter an Apple ID password or 2FA code into the Team API screen. Treat the `.p8` key like a password; Apple only lets you download it once. Revoke it in Apple's account portal if it is lost or exposed.
+- Creating certificates, registering devices and creating profiles changes real Apple Developer account resources. The app asks for a separate confirmation before those operations. Check team limits and resource IDs before confirming.
 
 ## Important security boundaries
 
