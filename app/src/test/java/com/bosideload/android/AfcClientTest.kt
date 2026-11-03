@@ -87,6 +87,72 @@ class AfcClientTest {
         assertEquals(listOf(0x0DL, 0x14L), operations)
     }
 
+
+    @Test
+    fun rejectsSourceLongerThanDeclaredSizeAndClosesRemoteHandle() {
+        val responses = ByteArrayOutputStream().apply {
+            write(response(1, 0x0E, ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).putLong(17L).array()))
+            write(response(2, 0x01, status(0)))
+            write(response(3, 0x01, status(0)))
+        }
+        val requests = ByteArrayOutputStream()
+
+        val error = assertThrows(IOException::class.java) {
+            AfcClient(
+                input = ByteArrayInputStream(responses.toByteArray()),
+                output = requests
+            ).use { client ->
+                client.uploadFile(
+                    "/PublicStaging/long.ipa",
+                    ByteArrayInputStream(byteArrayOf(1, 2)),
+                    expectedSize = 1
+                )
+            }
+        }
+
+        assertEquals("IPA source contains more bytes than expected size", error.message)
+        assertEquals(listOf(0x0DL, 0x10L, 0x14L), requestOperations(requests.toByteArray()))
+    }
+
+    @Test
+    fun reportsDeviceWriteFailureAndStillClosesRemoteHandle() {
+        val responses = ByteArrayOutputStream().apply {
+            write(response(1, 0x0E, ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).putLong(23L).array()))
+            write(response(2, 0x01, status(7)))
+            write(response(3, 0x01, status(0)))
+        }
+        val requests = ByteArrayOutputStream()
+
+        val error = assertThrows(IOException::class.java) {
+            AfcClient(
+                input = ByteArrayInputStream(responses.toByteArray()),
+                output = requests
+            ).use { client ->
+                client.uploadFile(
+                    "/PublicStaging/rejected.ipa",
+                    ByteArrayInputStream(byteArrayOf(9)),
+                    expectedSize = 1
+                )
+            }
+        }
+
+        assertEquals("AFC FileWrite failed with status 7", error.message)
+        assertEquals(listOf(0x0DL, 0x10L, 0x14L), requestOperations(requests.toByteArray()))
+    }
+
+    private fun requestOperations(wire: ByteArray): List<Long> {
+        val operations = mutableListOf<Long>()
+        var offset = 0
+        while (offset < wire.size) {
+            val header = AfcPacketCodec.decodeHeader(
+                wire.copyOfRange(offset, offset + AfcPacketCodec.HEADER_SIZE)
+            )
+            operations += header.operation
+            offset += header.entireLength.toInt()
+        }
+        return operations
+    }
+
     private fun response(packetNumber: Long, operation: Long, body: ByteArray): ByteArray =
         AfcPacketCodec.encode(packetNumber, operation, data = body)
 
