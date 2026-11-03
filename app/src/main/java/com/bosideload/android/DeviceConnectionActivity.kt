@@ -193,6 +193,66 @@ class DeviceConnectionActivity : Activity() {
                                         }
                                     }
                                     card.addView(connectButton)
+                                    val wifiInstallButton = Button(this@DeviceConnectionActivity).apply {
+                                        text = "Cài IPA qua Wi-Fi"
+                                        isAllCaps = false
+                                        isEnabled = false
+                                        setOnClickListener {
+                                            val session = activeWifiLockdownSession
+                                            val ipa = signedIpaFile()
+                                            if (session == null || ipa == null || !ipa.isFile || !ipa.canRead() || ipa.length() <= 0) {
+                                                status.text = "Cần xác thực Wi-Fi và chọn IPA đã ký từ màn hình chính trước."
+                                                return@setOnClickListener
+                                            }
+                                            if (ipa.length() > MAX_INSTALL_IPA_BYTES || pairingInProgress) {
+                                                status.text = "IPA vượt 512 MB hoặc đang có thao tác cài đặt."
+                                                return@setOnClickListener
+                                            }
+                                            pairingInProgress = true
+                                            isEnabled = false
+                                            status.text = "Đang cài IPA qua Wi-Fi…"
+                                            Thread({
+                                                try {
+                                                    val record = pairRecordStore.load(match.deviceId)
+                                                        ?: throw IllegalStateException("Pairing record không còn")
+                                                    val result = ipa.inputStream().use { input ->
+                                                        WifiSideloadInstallCoordinator(session, device.hostAddress, record).install(
+                                                            input, ipa.length()
+                                                        ) { progress ->
+                                                            runOnUiThread {
+                                                                status.text = when (progress.stage) {
+                                                                    WifiSideloadInstallCoordinator.Stage.UPLOADING_IPA ->
+                                                                        "Đang tải IPA qua Wi-Fi: ${progress.bytesTransferred ?: 0} / ${progress.totalBytes ?: 0} byte"
+                                                                    WifiSideloadInstallCoordinator.Stage.INSTALLING_APP ->
+                                                                        "Đang cài ứng dụng: ${progress.installPercent ?: 0}% — ${progress.message}"
+                                                                    WifiSideloadInstallCoordinator.Stage.COMPLETE -> progress.message
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                    runOnUiThread {
+                                                        pairingInProgress = false
+                                                        status.text = if (result.stagingCleanupSucceeded) {
+                                                            "✓ iPhone báo cài đặt hoàn tất qua Wi-Fi; IPA tạm đã được xóa."
+                                                        } else {
+                                                            "✓ iPhone báo cài đặt hoàn tất qua Wi-Fi; không xóa được IPA tạm."
+                                                        }
+                                                        wifiInstallButton.isEnabled = activeWifiLockdownSession != null
+                                                    }
+                                                } catch (error: Exception) {
+                                                    runOnUiThread {
+                                                        pairingInProgress = false
+                                                        status.text = "Cài IPA qua Wi-Fi thất bại: ${error.message}"
+                                                        wifiInstallButton.isEnabled = activeWifiLockdownSession != null
+                                                    }
+                                                }
+                                            }, "BoSideload-wifi-install").apply { isDaemon = true; start() }
+                                        }
+                                    }
+                                    card.addView(wifiInstallButton)
+                                    connectButton.setOnClickListener {
+                                        wifiInstallButton.isEnabled = false
+                                    }
                                 }
                                 wifiDevicesPanel.addView(card, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
                                 status.text = if (match != null) {
