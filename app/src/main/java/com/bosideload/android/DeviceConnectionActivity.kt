@@ -390,6 +390,10 @@ class DeviceConnectionActivity : Activity() {
                         }
                     }
                 }
+                getSharedPreferences(VERIFIED_DEVICE_PREFS, MODE_PRIVATE)
+                    .edit()
+                    .putString(KEY_LAST_VERIFIED_UDID, serial)
+                    .apply()
                 runOnUiThread {
                     pairingInProgress = false
                     updatePairingActions(serial)
@@ -509,6 +513,8 @@ class DeviceConnectionActivity : Activity() {
 
     companion object {
         const val EXTRA_SIGNED_IPA_PATH = "com.bosideload.android.extra.SIGNED_IPA_PATH"
+        internal const val VERIFIED_DEVICE_PREFS = "bo_verified_iphone"
+        internal const val KEY_LAST_VERIFIED_UDID = "last_verified_udid"
         private const val MAX_INSTALL_IPA_BYTES = 512L * 1024L * 1024L
         private const val SERVICE_IO_TIMEOUT_MS = 120_000
         private const val APPLE_VENDOR_ID = 0x05AC
