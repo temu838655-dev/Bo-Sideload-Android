@@ -59,7 +59,9 @@ internal class WifiAppleDeviceDiscovery(
                     }
 
                     override fun onServiceResolved(info: NsdServiceInfo) {
-                        if (closed) return
+                        // NSD callbacks can arrive out of order: a service may disappear
+                        // while resolveService is still running. Ignore that stale result.
+                        if (closed || !resolvedNames.contains(info.serviceName)) return
                         val address = info.host?.hostAddress
                         val port = info.port
                         if (address.isNullOrBlank() || port !in 1..65535) {
