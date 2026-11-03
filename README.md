@@ -9,7 +9,7 @@ Bo Sideload is an Android app for inspecting IPA packages and re-signing them lo
 - Select a P12 signing identity and provisioning profile; enter the P12 password for that signing operation only.
 - Run zsign locally on Android and export the signed IPA.
 - Preflight-check Bundle ID, profile prefix, platform, expiry, certificate fingerprint/private-key availability and (when a verified device UDID is available) device authorization.
-- Detect nested `.appex` and Watch app bundles during signing preflight, read their Bundle IDs from each `Info.plist`, and **block signing** when they are present because the current UI accepts only one provisioning profile; per-extension profile selection, entitlement comparison and validation are not implemented yet.
+- Detect nested `.appex` and Watch app bundles, read each Bundle ID, and allow selecting multiple provisioning profiles. Preflight maps profiles to the main app and nested bundles by `application-identifier`, validates each selected profile against the P12 certificate and target UDID, rejects missing/ambiguous/unused profiles, and passes the resolved profiles to zsign using repeated `-m` arguments. This is compatibility checking, not full Apple CMS trust-chain verification; validate resulting IPAs on a real iPhone.
 - Inspect Apple provisioning-profile metadata and public X.509 certificates.
 - Edit Swift, plist and entitlements text files in a lightweight source workspace. This is not a full Xcode replacement.
 - Discover Apple USB devices, request Android USB Host permission, monitor usbmux attach/detach events, and perform the ordinary Lockdown Pair exchange.
