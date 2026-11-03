@@ -10,11 +10,12 @@ internal data class PairRecord(
     val hostKeyMaterial: ByteArray,
     val deviceCertificate: ByteArray,
     val rootCertificate: ByteArray,
+    val rootKeyMaterial: ByteArray,
     val escrowBag: ByteArray? = null
 ) {
     fun validate() {
         require(deviceId.isNotBlank() && hostId.isNotBlank() && systemBuid.isNotBlank())
-        listOf(hostCertificate, hostKeyMaterial, deviceCertificate, rootCertificate).forEach {
+        listOf(hostCertificate, hostKeyMaterial, deviceCertificate, rootCertificate, rootKeyMaterial).forEach {
             require(it.isNotEmpty() && it.size <= PairRecordCodec.MAX_FIELD_BYTES)
         }
         require(escrowBag == null || escrowBag.size <= PairRecordCodec.MAX_FIELD_BYTES)
@@ -40,6 +41,7 @@ internal object PairRecordCodec {
             writeBytes(out, record.hostKeyMaterial)
             writeBytes(out, record.deviceCertificate)
             writeBytes(out, record.rootCertificate)
+            writeBytes(out, record.rootKeyMaterial)
             out.writeBoolean(record.escrowBag != null)
             record.escrowBag?.let { writeBytes(out, it) }
         }
@@ -58,6 +60,7 @@ internal object PairRecordCodec {
                 input.readUTF(),
                 input.readUTF(),
                 input.readUTF(),
+                readBytes(input),
                 readBytes(input),
                 readBytes(input),
                 readBytes(input),
