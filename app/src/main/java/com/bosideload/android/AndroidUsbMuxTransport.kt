@@ -23,13 +23,13 @@ internal class AndroidUsbMuxTransport private constructor(
     private val input: UsbEndpoint,
     private val output: UsbEndpoint,
     private val timeoutMs: Int
-) : Closeable {
+) : UsbMuxTransport {
 
     private val closed = AtomicBoolean(false)
 
     @Synchronized
     @Throws(IOException::class)
-    fun writePacket(message: Long, tag: Long, payload: ByteArray) {
+    override fun writePacket(message: Long, tag: Long, payload: ByteArray) {
         checkOpen()
         val packet = UsbMuxPacketCodec.encode(message, tag, payload)
         var offset = 0
@@ -44,7 +44,7 @@ internal class AndroidUsbMuxTransport private constructor(
     }
 
     @Throws(IOException::class)
-    fun readPacket(maxPacketSize: Long = UsbMuxPacketHeader.DEFAULT_MAX_PACKET_SIZE): UsbMuxPacketCodec.Packet {
+    override fun readPacket(maxPacketSize: Long = UsbMuxPacketHeader.DEFAULT_MAX_PACKET_SIZE): UsbMuxPacketCodec.Packet {
         checkOpen()
         require(maxPacketSize in UsbMuxPacketHeader.HEADER_SIZE.toLong()..Int.MAX_VALUE.toLong()) {
             "invalid maximum packet size"
@@ -59,6 +59,46 @@ internal class AndroidUsbMuxTransport private constructor(
         val payload = ByteArray((header.length - UsbMuxPacketHeader.HEADER_SIZE).toInt())
         readFully(payload)
         return UsbMuxPacketCodec.Packet(header, payload)
+    }
+
+    /**
+     * Writes raw service bytes after a successful usbmux Connect. No usbmux
+     * header is added in this mode.
+     */
+    @Synchronized
+    @Throws(IOException::class)
+    override fun writeRaw(bytes: ByteArray, offset: Int, length: Int) {
+        checkOpen()
+        require(offset >= 0 && length >= 0 && offset <= bytes.size - length) {
+            "invalid write range"
+        }
+        var written = 0
+        while (written < length) {
+            val chunk = minOf(MAX_BULK_TRANSFER_BYTES, length - written)
+            val count = connection.bulkTransfer(
+                output, bytes, offset + written, chunk, timeoutMs
+            )
+            if (count <= 0) throw IOException("USB raw bulk OUT failed or timed out (result=$count)")
+            written += count
+        }
+    }
+
+    /**
+     * Reads raw service bytes after a successful usbmux Connect. Each call may
+     * return fewer bytes than requested, as required by InputStream semantics.
+     */
+    @Throws(IOException::class)
+    override fun readRaw(target: ByteArray, offset: Int, length: Int): Int {
+        checkOpen()
+        require(offset >= 0 && length >= 0 && offset <= target.size - length) {
+            "invalid read range"
+        }
+        if (length == 0) return 0
+        val chunk = minOf(MAX_BULK_TRANSFER_BYTES, length)
+        val count = connection.bulkTransfer(input, target, offset, chunk, timeoutMs)
+        if (count < 0) throw IOException("USB raw bulk IN failed or timed out (result=$count)")
+        if (count == 0) throw IOException("USB raw bulk IN returned no data")
+        return count
     }
 
     private fun readFully(target: ByteArray) {
