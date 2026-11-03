@@ -62,7 +62,7 @@ class AppleConnectActivity : Activity() {
         page.addView(Button(this).apply { text = "Quay lại"; isAllCaps = false; setOnClickListener { finish() } }, full())
         vault.load()?.let {
             keyId.setText(it.keyId); issuerId.setText(it.issuerId)
-            status.text = "Đã lưu một Team API Key được mã hóa trên thiết bị. Chọn lại .p8 để xác thực."
+            status.text = "Đã lưu thông tin API Key được mã hóa trên thiết bị. Chưa xác minh loại key hoặc quyền truy cập; bấm kiểm tra để xác nhận với Apple."
         }
         setContentView(scroll)
     }
