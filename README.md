@@ -24,7 +24,8 @@ Bo Sideload is an Android app for inspecting IPA packages and re-signing them lo
 - The USB pairing and installation implementation is present in the app, but it has **not yet been validated end-to-end on a physical Android + iPhone combination**. GitHub Actions success proves compilation and automated tests only; it does not prove real-device USB compatibility or successful installation. Treat the feature as experimental until that test is completed.
 - Discover Apple Wi-Fi Sync Bonjour/mDNS advertisements and compare the short `authTag` against locally stored Lockdown `HostID` values. A match identifies a candidate only; it is **not device authentication**.
 - For a previously paired device advertising legacy Wi-Fi Sync, let the user initiate Lockdown `StartSession` over the resolved Bonjour endpoint and authenticate TLS against the stored, pinned `DeviceCertificate`. The session is closed with the activity lifecycle. This compatibility path is not RemotePairing.
-- RemotePairing, Wi-Fi AFC/IPA transfer and Wi-Fi Installation Proxy installation are not implemented yet; the new Wi-Fi TLS path still needs physical iPhone validation.
+- Wi-Fi now has reusable TCP service connections, paired service-TLS handling, and an AFC → Installation Proxy coordinator in source. The coordinator is not yet connected to the IPA-picker UI and has not been validated on physical iPhone hardware, so Wi-Fi installation is not yet an end-user feature.
+- CoreDevice RemotePairing/RSD remains separate and is not implemented.
 - Supported native signing-engine ABIs: `arm64-v8a` and `armeabi-v7a`.
 
 ## Important security boundaries
