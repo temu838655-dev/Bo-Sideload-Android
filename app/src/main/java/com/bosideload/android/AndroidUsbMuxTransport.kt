@@ -34,8 +34,9 @@ internal class AndroidUsbMuxTransport private constructor(
         val packet = UsbMuxPacketCodec.encode(message, tag, payload)
         var offset = 0
         while (offset < packet.size) {
+            val length = minOf(MAX_BULK_TRANSFER_BYTES, packet.size - offset)
             val count = connection.bulkTransfer(
-                output, packet, offset, packet.size - offset, timeoutMs
+                output, packet, offset, length, timeoutMs
             )
             if (count <= 0) throw IOException("USB bulk OUT failed or timed out (result=$count)")
             offset += count
@@ -65,8 +66,9 @@ internal class AndroidUsbMuxTransport private constructor(
         var offset = 0
         while (offset < target.size) {
             checkOpen()
+            val length = minOf(MAX_BULK_TRANSFER_BYTES, target.size - offset)
             val count = connection.bulkTransfer(
-                input, target, offset, target.size - offset, timeoutMs
+                input, target, offset, length, timeoutMs
             )
             if (count < 0) throw EOFException("USB bulk IN failed or timed out (result=$count)")
             if (count == 0) throw EOFException("USB bulk IN returned no data")
@@ -149,5 +151,7 @@ internal class AndroidUsbMuxTransport private constructor(
         private const val USBMUX_CLASS = 0xFF
         private const val USBMUX_SUBCLASS = 0xFE
         private const val USBMUX_PROTOCOL = 0x02
+        // Android USB Host has a 16 KiB bulkTransfer limit on older API levels.
+        private const val MAX_BULK_TRANSFER_BYTES = 16 * 1024
     }
 }
