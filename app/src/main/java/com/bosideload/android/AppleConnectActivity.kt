@@ -22,6 +22,7 @@ class AppleConnectActivity : Activity() {
     private var p8: String? = null
     private var currentCsr: String? = null
     private var pendingP12: ByteArray? = null
+    private var pendingProfile: ByteArray? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -69,6 +70,10 @@ class AppleConnectActivity : Activity() {
             setOnClickListener { exportP12() }
         }, full())
         page.addView(Button(this).apply {
+            text = "⑧ Tạo provisioning profile"; isAllCaps = false
+            setOnClickListener { createProvisioningProfile() }
+        }, full())
+        page.addView(Button(this).apply {
             text = "Xóa toàn bộ khóa API và khóa ký đã lưu"; isAllCaps = false
             setOnClickListener {
                 vault.clear(); p8 = null; keyId.text.clear(); issuerId.text.clear()
@@ -113,9 +118,26 @@ class AppleConnectActivity : Activity() {
                 pendingP12?.fill(0); pendingP12 = null
                 status.text = "Đã hủy xuất P12; dữ liệu tạm đã được xóa khỏi bộ nhớ."
             }
+            if (requestCode == 813) {
+                pendingProfile?.fill(0); pendingProfile = null
+                status.text = "Đã hủy lưu provisioning profile; dữ liệu tạm đã được xóa."
+            }
             return
         }
         val uri: Uri = data?.data ?: return
+        if (requestCode == 813) {
+            val bytes = pendingProfile ?: run { status.text = "Không còn profile để lưu."; return }
+            try {
+                contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
+                    ?: error("Không mở được tệp đích.")
+                status.text = "Đã lưu provisioning profile. Hãy kiểm tra profile trước khi dùng ký IPA."
+            } catch (e: Exception) {
+                status.text = "Không thể lưu profile: " + (e.message ?: "lỗi ghi tệp")
+            } finally {
+                bytes.fill(0); pendingProfile = null
+            }
+            return
+        }
         if (requestCode == 812) {
             val bytes = pendingP12 ?: run { status.text = "Không còn dữ liệu P12 để xuất."; return }
             try {
@@ -238,6 +260,85 @@ class AppleConnectActivity : Activity() {
                 }.start()
             }
             .show()
+    }
+
+    private fun createProvisioningProfile() {
+        val credentials = runCatching { vault.load() }.getOrNull()
+        if (credentials == null) {
+            status.text = "Chưa lưu Team API Key. Hãy kết nối và kiểm tra Apple API trước."
+            return
+        }
+        val profileName = EditText(this).apply { hint = "Tên profile, ví dụ Bo Sideload Dev"; setSingleLine(true) }
+        val bundleId = EditText(this).apply { hint = "Bundle ID resource ID từ Apple API"; setSingleLine(true) }
+        val certIds = EditText(this).apply { hint = "Certificate resource ID (phân cách dấu phẩy)"; setSingleLine(true) }
+        val deviceIds = EditText(this).apply { hint = "Device resource ID (bắt buộc Development/Ad Hoc)"; setSingleLine(true) }
+        val typeLabels = arrayOf("Development", "Ad Hoc", "App Store")
+        var selectedType = 0
+        val form = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), dp(8))
+            addView(profileName, full()); addView(bundleId, full())
+            addView(certIds, full()); addView(deviceIds, full())
+            addView(TextView(this@AppleConnectActivity).apply {
+                text = "ID ở đây là resource ID Apple trả về, không phải Bundle ID dạng com.example.app hoặc UDID thiết bị."
+                textSize = 12f
+            }, full())
+        }
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Thông tin provisioning profile")
+            .setView(form)
+            .setSingleChoiceItems(typeLabels, selectedType) { _, which -> selectedType = which }
+            .setNegativeButton("Hủy", null)
+            .setPositiveButton("Tiếp tục") { _, _ ->
+                val type = AppleProvisioningProfileManager.Type.values()[selectedType]
+                val certList = certIds.text.toString().split(",").map { it.trim() }.filter { it.isNotBlank() }
+                val deviceList = deviceIds.text.toString().split(",").map { it.trim() }.filter { it.isNotBlank() }
+                val req = runCatching {
+                    AppleProvisioningProfileManager.Request(
+                        profileName.text.toString().trim(), type,
+                        bundleId.text.toString().trim(), certList, deviceList
+                    )
+                }.getOrElse {
+                    status.text = it.message ?: "Thông tin profile không hợp lệ."
+                    return@setPositiveButton
+                }
+                android.app.AlertDialog.Builder(this)
+                    .setTitle("Xác nhận tạo profile Apple")
+                    .setMessage("Apple sẽ tạo một provisioning profile thật trong tài khoản của bạn. Loại: " + type.apiValue +
+                        ". App ID resource ID: " + req.bundleIdResourceId +
+                        ". Certificate IDs: " + req.certificateResourceIds.joinToString() +
+                        ". Device IDs: " + req.deviceResourceIds.joinToString().ifBlank { "không áp dụng" } +
+                        ". Thao tác này thay đổi tài nguyên trên Apple; ứng dụng không tự xóa profile.")
+                    .setNegativeButton("Hủy", null)
+                    .setPositiveButton("Tạo profile") { _, _ -> runCreateProfile(credentials, req) }
+                    .show()
+            }
+            .show()
+    }
+
+    private fun runCreateProfile(
+        credentials: AppleConnectCredentialVault.Credentials,
+        request: AppleProvisioningProfileManager.Request
+    ) {
+        status.text = "Đang tạo provisioning profile với Apple…"
+        Thread {
+            val result = AppleProvisioningProfileManager.create(credentials, request)
+            runOnUiThread {
+                if (result.ok && result.profileContent != null) {
+                    pendingProfile?.fill(0)
+                    pendingProfile = result.profileContent
+                    val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                        addCategory(Intent.CATEGORY_OPENABLE)
+                        type = "application/octet-stream"
+                        putExtra(Intent.EXTRA_TITLE, "Bo-Sideload-" + request.type.name + ".mobileprovision")
+                    }
+                    status.text = result.message
+                    startActivityForResult(intent, 813)
+                } else {
+                    status.text = result.message
+                }
+            }
+        }.start()
     }
 
     private fun confirmCertificateCreation(type: String) {
