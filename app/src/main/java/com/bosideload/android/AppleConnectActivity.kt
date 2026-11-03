@@ -70,11 +70,15 @@ class AppleConnectActivity : Activity() {
             setOnClickListener { exportP12() }
         }, full())
         page.addView(Button(this).apply {
-            text = "⑧ Lấy danh sách App ID / certificate / thiết bị"; isAllCaps = false
+            text = "⑧ Đăng ký iPhone đã ghép đôi với Apple"; isAllCaps = false
+            setOnClickListener { registerVerifiedIphone() }
+        }, full())
+        page.addView(Button(this).apply {
+            text = "⑨ Lấy danh sách App ID / certificate / thiết bị"; isAllCaps = false
             setOnClickListener { loadAppleResourceIds() }
         }, full())
         page.addView(Button(this).apply {
-            text = "⑨ Tạo provisioning profile"; isAllCaps = false
+            text = "⑩ Tạo provisioning profile"; isAllCaps = false
             setOnClickListener { createProvisioningProfile() }
         }, full())
         page.addView(Button(this).apply {
@@ -269,6 +273,41 @@ class AppleConnectActivity : Activity() {
                             status.text = "Không thể tạo P12: " + (it.message ?: "lỗi không xác định")
                         }
                     }
+                }.start()
+            }
+            .show()
+    }
+
+    private fun registerVerifiedIphone() {
+        val credentials = runCatching { vault.load() }.getOrNull()
+        if (credentials == null) {
+            status.text = "Chưa lưu Team API Key. Hãy kết nối và kiểm tra Apple API trước."
+            return
+        }
+        val udid = getSharedPreferences(
+            DeviceConnectionActivity.VERIFIED_DEVICE_PREFS, MODE_PRIVATE
+        ).getString(DeviceConnectionActivity.KEY_LAST_VERIFIED_UDID, null)
+            ?.trim()?.takeIf { it.matches(Regex("[0-9A-Fa-f]{40}")) }
+        if (udid == null) {
+            status.text = "Chưa có UDID iPhone đã xác minh. Hãy kết nối iPhone qua USB và hoàn tất ghép đôi trong mục Thiết bị trước."
+            return
+        }
+        val nameInput = EditText(this).apply {
+            hint = "Tên dễ nhớ, ví dụ iPhone của tôi"
+            setSingleLine(true)
+            setText("My iPhone")
+        }
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Đăng ký iPhone với Apple Developer")
+            .setMessage("UDID lấy từ phiên ghép đôi USB đã xác minh:\\n$udid\\n\\nApple sẽ thêm thiết bị này vào danh sách thiết bị của Team. Việc đăng ký có thể ảnh hưởng hạn mức thiết bị và không tự động xóa thiết bị cũ.")
+            .setView(nameInput)
+            .setNegativeButton("Hủy", null)
+            .setPositiveButton("Xác nhận đăng ký") { _, _ ->
+                val name = nameInput.text.toString().trim()
+                status.text = "Đang đăng ký UDID với Apple…"
+                Thread {
+                    val result = AppleProvisioningProfileManager.registerDevice(credentials, name, udid)
+                    runOnUiThread { status.text = result.message }
                 }.start()
             }
             .show()
