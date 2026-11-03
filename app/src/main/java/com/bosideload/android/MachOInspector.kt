@@ -139,6 +139,27 @@ internal object MachOInspector {
         val blobLength = readU32(bytes, offset + 4, false)?.toLong()?.and(0xffffffffL) ?: return false
         val count = readU32(bytes, offset + 8, false)?.toLong()?.and(0xffffffffL) ?: return false
         if (blobLength < 12 || blobLength > size || count > 4096 || 12L + count * 8L > blobLength) return false
+
+        // Validate every indexed blob before interpreting any individual slot.
+        // Offsets are relative to the SuperBlob and must start after the complete
+        // index table. Reject malformed lengths, duplicate slot types and overlap.
+        val indexTableEnd = 12L + count * 8L
+        val seenTypes = HashSet<Long>()
+        val blobRanges = ArrayList<LongRange>(count.toInt())
+        repeat(count.toInt()) { index ->
+            val entry = offset + 12 + index * 8
+            val type = readU32(bytes, entry, false)?.toLong()?.and(0xffffffffL) ?: return false
+            val relative = readU32(bytes, entry + 4, false)?.toLong()?.and(0xffffffffL) ?: return false
+            if (!seenTypes.add(type) || relative < indexTableEnd || relative + 8 > blobLength) return false
+            val absolute = offset.toLong() + relative
+            if (absolute + 8 > offset.toLong() + blobLength) return false
+            val childLength = readU32(bytes, absolute.toInt() + 4, false)?.toLong()?.and(0xffffffffL) ?: return false
+            if (childLength < 8 || relative + childLength > blobLength) return false
+            val endExclusive = relative + childLength
+            if (blobRanges.any { relative < it.last + 1 && it.first < endExclusive }) return false
+            blobRanges.add(relative until endExclusive)
+        }
+
         repeat(count.toInt()) { index ->
             val entry = offset + 12 + index * 8
             val type = readU32(bytes, entry, false)?.toLong()?.and(0xffffffffL) ?: return false
