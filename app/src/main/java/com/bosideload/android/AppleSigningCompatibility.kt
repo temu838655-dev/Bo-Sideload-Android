@@ -10,7 +10,8 @@ internal object AppleSigningCompatibility {
     data class Check(
         val compatible: Boolean,
         val errors: List<String>,
-        val warnings: List<String>
+        val warnings: List<String>,
+        val profileOrder: List<Int> = emptyList()
     )
 
     fun check(
@@ -150,7 +151,10 @@ internal object AppleSigningCompatibility {
                 warnings += result.warnings.map { "${assignment.bundleId}: ${'$'}it" }
             }
         }
-        return Check(errors.isEmpty(), errors.distinct(), warnings.distinct())
+        return Check(
+            errors.isEmpty(), errors.distinct(), warnings.distinct(),
+            resolution.assignments.map { it.profileIndex }.distinct()
+        )
     }
 
     internal data class ProfileAssignment(val bundleId: String, val profileIndex: Int)
