@@ -137,7 +137,7 @@ internal class AndroidUsbMuxTransport private constructor(
             device: UsbDevice,
             timeoutMs: Int = DEFAULT_TIMEOUT_MS
         ): AndroidUsbMuxTransport {
-            require(timeoutMs > 0) { "timeout must be positive" }
+            require(timeoutMs >= 0) { "timeout must not be negative; use 0 for an indefinite USB read" }
             check(usbManager.hasPermission(device)) { "Android USB permission has not been granted" }
 
             var selected: UsbInterface? = null
