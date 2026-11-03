@@ -27,6 +27,15 @@ class LockdownResponseParserTest {
         assertEquals(true, result.enableSessionSsl)
     }
 
+    @Test fun preservesEscrowBagFromSuccessfulPairResponse() {
+        val escrow = byteArrayOf(3, 1, 4, 1, 5)
+        val result = LockdownResponseParser.parse(
+            LockdownPlistCodec.encode(mapOf("Request" to "Pair", "EscrowBag" to escrow))
+        ) as LockdownResponseParser.Response.Success
+        assertEquals("Pair", result.request)
+        org.junit.Assert.assertArrayEquals(escrow, result.escrowBag)
+    }
+
     @Test fun errorResponseIsNeverReportedAsSuccess() {
         val bytes = LockdownPlistCodec.encode(mapOf(
             "Request" to "StartSession",
