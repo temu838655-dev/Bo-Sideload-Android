@@ -69,7 +69,7 @@ internal class UsbMuxDeviceMonitor(
         } finally {
             try { session?.close() } catch (_: Exception) { }
             session = null
-            listener.onStatus("Đã dừng theo dõi usbmux.")
+            if (stopped.get()) listener.onStatus("Đã dừng theo dõi usbmux.")
         }
     }
 
