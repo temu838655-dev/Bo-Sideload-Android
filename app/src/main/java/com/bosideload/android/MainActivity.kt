@@ -139,6 +139,7 @@ class MainActivity : Activity() {
             setOnClickListener { showSigningPasswordDialog() }
         }
         page.addView(signButton, fullWidth())
+        restoreSavedSigningCredentials()
         signingStatus = label(
             "Chưa chọn đủ IPA, chứng chỉ và provisioning profile.",
             13f, secondaryText, false
@@ -168,6 +169,40 @@ class MainActivity : Activity() {
         ).apply { setPadding(dp(4), dp(8), dp(4), 0) }, fullWidth())
         setContentView(scroll)
         renderRecent()
+    }
+
+    private fun restoreSavedSigningCredentials() {
+        val prefs = getSharedPreferences(SIGNING_PREFS, MODE_PRIVATE)
+        val savedP12 = prefs.getString(KEY_P12_URI, null)
+        val savedProfile = prefs.getString(KEY_PROFILE_URI, null)
+
+        if (!savedP12.isNullOrBlank()) {
+            val uri = runCatching { Uri.parse(savedP12) }.getOrNull()
+            val readable = uri != null && runCatching {
+                contentResolver.openInputStream(uri)?.use { it.read() >= -1 } == true
+            }.getOrDefault(false)
+            if (readable && uri != null) {
+                p12Uri = uri
+                p12Button.text = "✓  Chứng chỉ đã lưu: ${displayName(uri)}"
+            } else {
+                prefs.edit().remove(KEY_P12_URI).apply()
+                p12Button.text = "①  Chọn chứng chỉ .p12"
+            }
+        }
+
+        if (!savedProfile.isNullOrBlank()) {
+            val uri = runCatching { Uri.parse(savedProfile) }.getOrNull()
+            val readable = uri != null && runCatching {
+                contentResolver.openInputStream(uri)?.use { it.read() >= -1 } == true
+            }.getOrDefault(false)
+            if (readable && uri != null) {
+                profileUri = uri
+                profileButton.text = "✓  Profile đã lưu: ${displayName(uri)}"
+            } else {
+                prefs.edit().remove(KEY_PROFILE_URI).apply()
+                profileButton.text = "②  Chọn provisioning profile"
+            }
+        }
     }
 
     private fun chooseCredential(requestCode: Int) {
@@ -361,12 +396,16 @@ class MainActivity : Activity() {
                     PICK_FILE -> inspect(uri, true)
                     PICK_P12 -> {
                         p12Uri = uri
-                        p12Button.text = "✓  Chứng chỉ: ${displayName(uri)}"
+                        getSharedPreferences(SIGNING_PREFS, MODE_PRIVATE).edit()
+                            .putString(KEY_P12_URI, uri.toString()).apply()
+                        p12Button.text = "✓  Chứng chỉ đã lưu: ${displayName(uri)}"
                         updateSignButton()
                     }
                     PICK_PROFILE -> {
                         profileUri = uri
-                        profileButton.text = "✓  Profile: ${displayName(uri)}"
+                        getSharedPreferences(SIGNING_PREFS, MODE_PRIVATE).edit()
+                            .putString(KEY_PROFILE_URI, uri.toString()).apply()
+                        profileButton.text = "✓  Profile đã lưu: ${displayName(uri)}"
                         updateSignButton()
                     }
                 }
@@ -539,6 +578,9 @@ class MainActivity : Activity() {
         private const val PICK_P12 = 101
         private const val PICK_PROFILE = 102
         private const val CREATE_SIGNED_IPA = 103
+        private const val SIGNING_PREFS = "bo_sideload_signing_credentials"
+        private const val KEY_P12_URI = "saved_p12_uri"
+        private const val KEY_PROFILE_URI = "saved_profile_uri"
         private const val MAX_IPA_BYTES = 512L * 1024L * 1024L
         private const val MAX_CREDENTIAL_BYTES = 20L * 1024L * 1024L
     }
