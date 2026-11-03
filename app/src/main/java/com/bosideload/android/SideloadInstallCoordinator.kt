@@ -34,7 +34,8 @@ internal class SideloadInstallCoordinator(
 
     data class Result(
         val remotePackagePath: String,
-        val bytesUploaded: Long
+        val bytesUploaded: Long,
+        val stagingCleanupSucceeded: Boolean
     )
 
     /**
@@ -111,15 +112,35 @@ internal class SideloadInstallCoordinator(
             }
         }
 
+        // Best-effort cleanup: a cleanup failure must not turn a confirmed
+        // Installation Proxy success into an install failure.
+        val cleanupSucceeded = try {
+            val cleanupDescriptor = openLockdownSession().use { lockdown ->
+                LockdownServiceStarter.start(
+                    channel = lockdown.channel,
+                    identifier = AfcServiceConnection.AFC_SERVICE_IDENTIFIER
+                )
+            }
+            AfcServiceConnection.open(
+                transport = newTransport(),
+                deviceId = deviceId,
+                descriptor = cleanupDescriptor,
+                record = pairRecord
+            ).use { connection -> connection.client.removeStagedIpa(remotePath) }
+            true
+        } catch (_: Exception) {
+            false
+        }
+
         onProgress?.invoke(
             Progress(
                 stage = Stage.COMPLETE,
                 bytesTransferred = upload.bytesWritten,
                 totalBytes = ipaSizeBytes,
                 installPercent = 100,
-                message = "iPhone đã báo cài đặt hoàn tất"
+                message = if (cleanupSucceeded) "iPhone đã báo cài đặt hoàn tất; IPA tạm đã được xóa" else "iPhone đã báo cài đặt hoàn tất; không xóa được IPA tạm, bạn có thể xóa thủ công"
             )
         )
-        return Result(remotePath, upload.bytesWritten)
+        return Result(remotePath, upload.bytesWritten, cleanupSucceeded)
     }
 }
