@@ -111,7 +111,29 @@ class DeviceConnectionActivity : Activity() {
                     append("   Product ID: ").append(hex(device.productId))
                     append("\nUSB class: ").append(device.deviceClass)
                     append("   Interfaces: ").append(device.interfaceCount)
+                    if (Build.VERSION.SDK_INT >= 21) {
+                        append("\nNhà sản xuất: ").append(device.manufacturerName ?: "Không cung cấp")
+                        append("\nTên sản phẩm: ").append(device.productName ?: "Không cung cấp")
+                    }
                     append("\nQuyền Android: ").append(if (usbManager.hasPermission(device)) "Đã cấp" else "Chưa cấp")
+                    if (usbManager.hasPermission(device)) {
+                        for (index in 0 until device.interfaceCount) {
+                            val usbInterface = device.getInterface(index)
+                            append("\n\nInterface ").append(index + 1)
+                            append(": class=").append(hex(usbInterface.interfaceClass))
+                            append(", subclass=").append(hex(usbInterface.interfaceSubclass))
+                            append(", protocol=").append(hex(usbInterface.interfaceProtocol))
+                            append(", endpoints=").append(usbInterface.endpointCount)
+                            for (endpointIndex in 0 until usbInterface.endpointCount) {
+                                val endpoint = usbInterface.getEndpoint(endpointIndex)
+                                append("\n  Endpoint ").append(endpointIndex + 1)
+                                append(": address=").append(hex(endpoint.address))
+                                append(", direction=").append(if (endpoint.direction == android.hardware.usb.UsbConstants.USB_DIR_IN) "IN" else "OUT")
+                                append(", type=").append(endpoint.type)
+                                append(", maxPacket=").append(endpoint.maxPacketSize)
+                            }
+                        }
+                    }
                 }
                 textSize = 13f
                 setTextColor(-1)
