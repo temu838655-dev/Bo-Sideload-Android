@@ -17,11 +17,11 @@ internal class AppleLockdownPairingClient(
     @Throws(IOException::class)
     fun pair(
         channel: LockdownSessionChannel,
-        deviceId: String,
+        deviceId: String?,
         systemBuid: String,
         hostId: String
     ): PairRecord {
-        require(deviceId.isNotBlank()) { "device ID must not be blank" }
+        if (deviceId != null) require(deviceId.isNotBlank()) { "device ID must not be blank" }
         require(systemBuid.isNotBlank()) { "SystemBUID must not be blank" }
         require(hostId.isNotBlank()) { "HostID must not be blank" }
 
@@ -49,8 +49,8 @@ internal class AppleLockdownPairingClient(
         if (!isPlausibleUdid(lockdownUdid)) {
             throw IOException("Lockdown returned an invalid UniqueDeviceID")
         }
-        if (!lockdownUdid.equals(deviceId.trim(), ignoreCase = true)) {
-            throw IOException("USB serial does not match the iPhone UDID reported by Lockdown; reconnect the correct device")
+        if (deviceId != null && !lockdownUdid.equals(deviceId.trim(), ignoreCase = true)) {
+            throw IOException("Connected device identity does not match the expected iPhone UDID")
         }
 
         val publicKeyResponse = channel.exchange(LockdownRequests.getValue(key = DEVICE_PUBLIC_KEY_KEY))
@@ -70,7 +70,7 @@ internal class AppleLockdownPairingClient(
 
         val pending = try {
             AppleLockdownPairing.prepare(
-                deviceId = deviceId,
+                deviceId = lockdownUdid,
                 devicePublicKeyPem = publicKeyPem,
                 systemBuid = systemBuid,
                 hostId = hostId
