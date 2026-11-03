@@ -33,6 +33,7 @@ internal object AppleP12PemExporter {
         require(p12File.isFile && p12File.length() in 1..MAX_P12_BYTES) {
             "P12 không tồn tại, rỗng hoặc vượt giới hạn 10 MB."
         }
+        cleanupExpiredTemporaryIdentities(context.cacheDir)
         val passwordChars = password.toCharArray()
         try {
             val store = KeyStore.getInstance("PKCS12")
@@ -82,6 +83,13 @@ internal object AppleP12PemExporter {
         }
     }
 
+    private fun cleanupExpiredTemporaryIdentities(cacheDir: File) {
+        val cutoff = System.currentTimeMillis() - TEMP_IDENTITY_MAX_AGE_MS
+        cacheDir.listFiles()
+            ?.filter { it.isDirectory && it.name.startsWith("zsign-identity-") && it.lastModified() < cutoff }
+            ?.forEach { it.deleteRecursively() }
+    }
+
     private fun verifyKeyPair(privateKey: PrivateKey, certificate: X509Certificate) {
         val algorithm = when (privateKey.algorithm.uppercase()) {
             "RSA" -> "SHA256withRSA"
@@ -124,4 +132,5 @@ internal object AppleP12PemExporter {
     }
 
     private const val MAX_P12_BYTES = 10L * 1024L * 1024L
+    private const val TEMP_IDENTITY_MAX_AGE_MS = 24L * 60L * 60L * 1000L
 }
