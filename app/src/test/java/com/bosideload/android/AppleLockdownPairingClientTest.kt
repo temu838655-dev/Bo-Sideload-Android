@@ -29,7 +29,8 @@ class AppleLockdownPairingClientTest {
     fun readsDevicePublicKeyPairsAndPersistsOnlyAfterPairSuccess() {
         val escrow = byteArrayOf(4, 5, 6)
         val input = ByteArrayInputStream(
-            response(mapOf("Request" to "GetValue", "Value" to publicKeyPem())) +
+            response(mapOf("Request" to "GetValue", "Value" to "TEST-UDID")) +
+                response(mapOf("Request" to "GetValue", "Value" to publicKeyPem())) +
                 response(mapOf("Request" to "Pair", "EscrowBag" to escrow))
         )
         val output = ByteArrayOutputStream()
@@ -48,7 +49,7 @@ class AppleLockdownPairingClientTest {
         assertEquals("AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE", record.hostId)
         assertArrayEquals(escrow, record.escrowBag)
         assertArrayEquals(record.hostKeyMaterial, persisted!!.hostKeyMaterial)
-        assertEquals(2, countLockdownRequests(output.toByteArray()))
+        assertEquals(3, countLockdownRequests(output.toByteArray()))
     }
 
     @Test
@@ -73,7 +74,8 @@ class AppleLockdownPairingClientTest {
     @Test
     fun doesNotPersistWhenDeviceRejectsPairRequest() {
         val input = ByteArrayInputStream(
-            response(mapOf("Request" to "GetValue", "Value" to publicKeyPem())) +
+            response(mapOf("Request" to "GetValue", "Value" to "TEST-UDID")) +
+                response(mapOf("Request" to "GetValue", "Value" to publicKeyPem())) +
                 response(mapOf("Request" to "Pair", "Error" to "PairingProhibited"))
         )
         var persisted = false
@@ -88,6 +90,36 @@ class AppleLockdownPairingClientTest {
             )
         }
         assertEquals(false, persisted)
+    }
+
+
+    @Test
+    fun rejectsUsbSerialThatDoesNotMatchLockdownUdid() {
+        val input = ByteArrayInputStream(
+            response(mapOf("Request" to "GetValue", "Value" to "DIFFERENT-UDID"))
+        )
+        var persisted = false
+        val output = ByteArrayOutputStream()
+        val client = AppleLockdownPairingClient { persisted = true }
+
+        assertThrows(IOException::class.java) {
+            client.pair(
+                LockdownSessionChannel(input, output),
+                "USB-SERIAL-UDID",
+                "11111111-2222-3333-4444-555555555555",
+                "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE"
+            )
+        }
+        assertEquals(false, persisted)
+        assertEquals(1, countLockdownRequests(output.toByteArray()))
+    }
+
+    @Test
+    fun validatesUdidFormatBeforePairing() {
+        assertEquals(true, AppleLockdownPairingClient.isPlausibleUdid("00008030-001C195E0E91802E"))
+        assertEquals(false, AppleLockdownPairingClient.isPlausibleUdid(" "))
+        assertEquals(false, AppleLockdownPairingClient.isPlausibleUdid("bad/value"))
+        assertEquals(false, AppleLockdownPairingClient.isPlausibleUdid("short"))
     }
 
     private fun countLockdownRequests(bytes: ByteArray): Int {
