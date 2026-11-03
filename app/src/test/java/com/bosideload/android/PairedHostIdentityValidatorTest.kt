@@ -1,5 +1,6 @@
 package com.bosideload.android
 
+import java.io.IOException
 import java.math.BigInteger
 import java.security.KeyPair
 import java.security.KeyPairGenerator
@@ -25,8 +26,44 @@ class PairedHostIdentityValidatorTest {
         val host = createIdentity()
         val unrelated = createIdentity()
 
-        assertThrows(java.io.IOException::class.java) {
+        assertThrows(IOException::class.java) {
             verifyPairedHostPrivateKeyMatchesCertificate(unrelated.privateKey, host.certificate)
+        }
+    }
+
+    @Test
+    fun acceptsHostAndDeviceCertificatesSignedBySavedRoot() {
+        val root = createIdentity()
+        val host = createIdentity(root)
+        val device = createIdentity(root)
+
+        validatePairedServiceCertificates(root.certificate, host.certificate, device.certificate)
+    }
+
+    @Test
+    fun rejectsCertificatesSignedByAnotherRoot() {
+        val savedRoot = createIdentity()
+        val otherRoot = createIdentity()
+        val host = createIdentity(otherRoot)
+        val device = createIdentity(savedRoot)
+
+        assertThrows(IOException::class.java) {
+            validatePairedServiceCertificates(savedRoot.certificate, host.certificate, device.certificate)
+        }
+    }
+
+    @Test
+    fun rejectsExpiredDeviceCertificate() {
+        val root = createIdentity()
+        val host = createIdentity(root)
+        val expiredDevice = createIdentity(
+            issuer = root,
+            notBefore = Date(System.currentTimeMillis() - 172_800_000),
+            notAfter = Date(System.currentTimeMillis() - 86_400_000)
+        )
+
+        assertThrows(IOException::class.java) {
+            validatePairedServiceCertificates(root.certificate, host.certificate, expiredDevice.certificate)
         }
     }
 
@@ -35,24 +72,29 @@ class PairedHostIdentityValidatorTest {
         val certificate: X509Certificate
     )
 
-    private fun createIdentity(): TestIdentity {
-        val generator = KeyPairGenerator.getInstance("RSA").apply {
-            initialize(2048)
-        }
+    private fun createIdentity(
+        issuer: TestIdentity? = null,
+        notBefore: Date = Date(System.currentTimeMillis() - 60_000),
+        notAfter: Date = Date(System.currentTimeMillis() + 86_400_000)
+    ): TestIdentity {
+        val generator = KeyPairGenerator.getInstance("RSA").apply { initialize(2048) }
         val pair: KeyPair = generator.generateKeyPair()
-        val now = System.currentTimeMillis()
-        val subject = X500Name("CN=Bo Sideload TLS Test")
+        val issuerIdentity = issuer
+        val subject = X500Name("CN=Bo Sideload TLS Test ${System.nanoTime()}")
+        val issuerName = issuerIdentity?.certificate?.subjectX500Principal
+            ?.let { X500Name.getInstance(it.encoded) } ?: subject
+        val signingKey = issuerIdentity?.privateKey ?: pair.private
         val builder = JcaX509v3CertificateBuilder(
-            subject,
-            BigInteger.valueOf(now).abs(),
-            Date(now - 60_000),
-            Date(now + 86_400_000),
+            issuerName,
+            BigInteger.valueOf(System.nanoTime()).abs(),
+            notBefore,
+            notAfter,
             subject,
             pair.public
         )
-        val signer = JcaContentSignerBuilder("SHA256withRSA").build(pair.private)
+        val signer = JcaContentSignerBuilder("SHA256withRSA").build(signingKey)
         val certificate = JcaX509CertificateConverter().getCertificate(builder.build(signer))
-        certificate.verify(pair.public)
+        certificate.verify(issuerIdentity?.certificate?.publicKey ?: pair.public)
         return TestIdentity(pair.private, certificate)
     }
 }
