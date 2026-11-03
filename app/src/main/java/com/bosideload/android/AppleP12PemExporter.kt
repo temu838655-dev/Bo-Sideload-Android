@@ -132,5 +132,5 @@ internal object AppleP12PemExporter {
     }
 
     private const val MAX_P12_BYTES = 10L * 1024L * 1024L
-    private const val TEMP_IDENTITY_MAX_AGE_MS = 24L * 60L * 60L * 1000L
+    private const val TEMP_IDENTITY_MAX_AGE_MS = 60L * 60L * 1000L
 }
