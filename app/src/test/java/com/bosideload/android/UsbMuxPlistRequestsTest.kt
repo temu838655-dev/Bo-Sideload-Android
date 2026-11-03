@@ -57,5 +57,8 @@ class UsbMuxPlistRequestsTest {
         assertThrows(IllegalArgumentException::class.java) {
             UsbMuxPlistRequests.connectPayload(deviceId = 1, devicePort = 65536)
         }
+        assertThrows(IllegalArgumentException::class.java) {
+            UsbMuxPlistRequests.connectPayload(deviceId = 0x1_0000_0000L, devicePort = 62078)
+        }
     }
 }
