@@ -11,7 +11,6 @@ import java.security.MessageDigest
 import java.security.PrivateKey
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
-import java.security.spec.PKCS8EncodedKeySpec
 import javax.net.ssl.KeyManagerFactory
 import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLSocket
@@ -120,12 +119,11 @@ internal class LockdownTlsSession private constructor(
                 val obj = parser.readObject()
                     ?: throw IllegalArgumentException("host private key PEM is empty")
                 val converter = JcaPEMKeyConverter()
-                val keyPair = when (obj) {
-                    is org.bouncycastle.openssl.PEMKeyPair -> converter.getKeyPair(obj)
+                return when (obj) {
+                    is org.bouncycastle.openssl.PEMKeyPair -> converter.getKeyPair(obj).private
                     is org.bouncycastle.asn1.pkcs.PrivateKeyInfo -> converter.getPrivateKey(obj)
                     else -> throw IllegalArgumentException("unsupported host private key PEM")
                 }
-                return if (keyPair is PrivateKey) keyPair else keyPair.private
             }
         }
     }
