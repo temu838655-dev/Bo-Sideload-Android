@@ -26,6 +26,13 @@ Kotlin DeviceConnectionActivity
 
 The current USB path is implemented in Kotlin rather than delegated to a desktop `usbmuxd` process. Android's `UsbDeviceConnection` remains owned by the app. Do not introduce a desktop daemon assumption that cannot access Android USB Host handles.
 
+## IPA signing scope
+
+- The signing UI currently accepts one P12 identity and one provisioning profile for the IPA operation.
+- Preflight detects nested `.appex` and Watch app `Info.plist` entries and warns that those bundles may need their own App IDs and provisioning profiles.
+- Upstream zsign supports multiple `-m` profile arguments, but Bo Sideload does not yet expose per-extension profile selection, compatibility checks, or post-sign verification for every nested bundle.
+- Do not interpret a successful main-app check as proof that all extensions or Watch bundles are correctly signed or installable.
+
 ## Wi-Fi implementation sequence
 
 1. (Done) Discover `_apple-mobdev2._tcp.` services using Android NSD and hold a Wi-Fi multicast lock only while scanning.
@@ -62,4 +69,4 @@ Do not connect to a discovered IP address merely because its TCP port is open. D
 
 ## Current status
 
-USB pairing and the USB IPA installation pipeline are wired in the app but still require end-to-end validation on physical Android/iPhone hardware. Wi-Fi Bonjour discovery is now implemented as a preliminary discovery feature. Wi-Fi pairing, authenticated network transport, IPA transfer and installation are still pending.
+USB pairing and the USB IPA installation pipeline are wired in the app but still require end-to-end validation on physical Android/iPhone hardware. Legacy Wi-Fi Sync Bonjour discovery, authTag candidate matching, user-triggered Lockdown TLS pinning, Wi-Fi service connections, AFC staging and Installation Proxy orchestration are implemented in source but remain experimental until physical-device acceptance tests pass. CoreDevice RemotePairing/RSD is not implemented. The signing preflight now warns when nested extension/Watch bundles are present; per-bundle profile selection and verification remain pending.
