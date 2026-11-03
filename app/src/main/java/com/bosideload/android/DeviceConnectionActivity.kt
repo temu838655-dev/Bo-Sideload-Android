@@ -247,7 +247,7 @@ class DeviceConnectionActivity : Activity() {
                                                     runOnUiThread {
                                                         pairingInProgress = false
                                                         status.text = "Cài IPA qua Wi-Fi thất bại: ${error.message}"
-                                                        wifiInstallButton.isEnabled = activeWifiLockdownSession != null
+                                                        wifiInstallButton?.isEnabled = activeWifiLockdownSession != null
                                                     }
                                                 }
                                             }, "BoSideload-wifi-install").apply { isDaemon = true; start() }
