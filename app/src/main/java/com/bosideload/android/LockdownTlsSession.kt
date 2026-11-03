@@ -135,7 +135,9 @@ internal class LockdownTlsSession private constructor(
                     "bo-lockdown-host",
                     hostPrivateKey,
                     CharArray(0),
-                    arrayOf(hostCertificate)
+                    // Send the same paired host-to-root certificate chain used
+                    // by AFC and installation_proxy service TLS.
+                    arrayOf(hostCertificate, rootCertificate)
                 )
             }
             val keyManagers = KeyManagerFactory.getInstance(
