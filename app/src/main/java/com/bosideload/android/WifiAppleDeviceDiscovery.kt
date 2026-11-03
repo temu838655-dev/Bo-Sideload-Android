@@ -71,7 +71,7 @@ internal class WifiAppleDeviceDiscovery(
                                 serviceName = info.serviceName,
                                 hostAddress = address,
                                 port = port,
-                                txtKeys = info.attributes.keys.map { it.toString(Charsets.UTF_8) }.toSet()
+                                txtKeys = info.attributes.keys.toSet()
                             )
                         )
                     }
