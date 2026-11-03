@@ -111,17 +111,20 @@ internal class LockdownTlsSession private constructor(
         }
 
         private fun createSslContext(record: PairRecord): SSLContext {
-            val rootCertificate = parseCertificate(record.rootCertificate)
+            // Lockdown StartSession authenticates this host with the paired
+            // HostCertificate/HostPrivateKey. The Root identity is reserved
+            // for service TLS handshakes (AFC / installation_proxy).
+            val hostCertificate = parseCertificate(record.hostCertificate)
             val deviceCertificate = parseCertificate(record.deviceCertificate)
-            val rootPrivateKey = parsePrivateKey(record.rootKeyMaterial)
+            val hostPrivateKey = parsePrivateKey(record.hostKeyMaterial)
 
             val identityStore = KeyStore.getInstance(KeyStore.getDefaultType()).apply {
                 load(null)
                 setKeyEntry(
-                    "bo-lockdown-root",
-                    rootPrivateKey,
+                    "bo-lockdown-host",
+                    hostPrivateKey,
                     CharArray(0),
-                    arrayOf(rootCertificate)
+                    arrayOf(hostCertificate)
                 )
             }
             val keyManagers = KeyManagerFactory.getInstance(
