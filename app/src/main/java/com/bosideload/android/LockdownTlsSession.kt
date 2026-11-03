@@ -118,26 +118,26 @@ internal class LockdownTlsSession private constructor(
             val hostCertificate = parseCertificate(record.hostCertificate)
             val deviceCertificate = parseCertificate(record.deviceCertificate)
             val hostPrivateKey = parsePrivateKey(record.hostKeyMaterial)
+            val rootPrivateKey = parsePrivateKey(record.rootKeyMaterial)
 
-            // Apply the same pairing-chain and key checks before StartSession TLS
-            // as before service TLS. A malformed saved record must never reach
-            // the host-authentication handshake.
+            // Validate both generated key pairs before StartSession TLS.
             validatePairedServiceCertificates(
                 rootCertificate,
                 hostCertificate,
                 deviceCertificate
             )
             verifyPairedHostPrivateKeyMatchesCertificate(hostPrivateKey, hostCertificate)
+            verifyPairedRootPrivateKeyMatchesCertificate(rootPrivateKey, rootCertificate)
 
             val identityStore = KeyStore.getInstance(KeyStore.getDefaultType()).apply {
                 load(null)
+                // Match the widely used libimobiledevice OpenSSL Lockdown
+                // handshake: RootCertificate + RootPrivateKey are the TLS identity.
                 setKeyEntry(
-                    "bo-lockdown-host",
-                    hostPrivateKey,
+                    "bo-lockdown-root",
+                    rootPrivateKey,
                     CharArray(0),
-                    // Send the same paired host-to-root certificate chain used
-                    // by AFC and installation_proxy service TLS.
-                    arrayOf(hostCertificate, rootCertificate)
+                    arrayOf(rootCertificate)
                 )
             }
             val keyManagers = KeyManagerFactory.getInstance(
