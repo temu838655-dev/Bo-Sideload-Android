@@ -22,7 +22,7 @@ internal object AppleLockdownPairing {
     fun prepare(
         deviceId: String,
         devicePublicKeyPem: ByteArray,
-        systemBuid: String = UUID.randomUUID().toString().uppercase(),
+        systemBuid: String,
         hostId: String = UUID.randomUUID().toString().uppercase()
     ): Pending {
         require(deviceId.isNotBlank()) { "device ID must not be blank" }
@@ -68,4 +68,11 @@ internal object AppleLockdownPairing {
         persistEncrypted(record)
         return record
     }
+
+    /** Persists only a successful Pair reply through the Android Keystore-backed store. */
+    fun completeAndStore(
+        pending: Pending,
+        response: LockdownResponseParser.Response,
+        store: EncryptedPairRecordStore
+    ): PairRecord = complete(pending, response) { record -> store.save(record) }
 }
