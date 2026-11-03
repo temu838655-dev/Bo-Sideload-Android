@@ -12,7 +12,6 @@ import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
 import android.widget.Button
-import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -24,7 +23,6 @@ class DeviceConnectionActivity : Activity() {
     private lateinit var devicesPanel: LinearLayout
     private lateinit var pairButton: Button
     private lateinit var installButton: Button
-    private lateinit var wifiAddressInput: EditText
     private var attachedAppleDevice: UsbDevice? = null
     private var attachedUsbmuxDeviceId: Long? = null
     private var attachedDeviceSerial: String? = null
@@ -96,31 +94,16 @@ class DeviceConnectionActivity : Activity() {
         devicesPanel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(devicesPanel)
         root.addView(TextView(this).apply {
-            text = "KẾT NỐI QUA WI-FI"
+            text = "WI-FI LÀ CHẾ ĐỘ ƯU TIÊN"
             textSize = 16f
             setTextColor(-1)
-            setPadding(0, dp(18), 0, dp(6))
+            setPadding(0, dp(20), 0, dp(6))
         })
-        wifiAddressInput = EditText(this).apply {
-            hint = "Địa chỉ IP iPhone (ví dụ 192.168.1.25)"
-            setSingleLine(true)
-            inputType = android.text.InputType.TYPE_CLASS_TEXT
-            setTextColor(-1)
-            setHintTextColor(0xFF9EABC0.toInt())
-            setPadding(dp(12), dp(8), dp(12), dp(8))
-            setBackgroundColor(0xFF162135.toInt())
-        }
-        root.addView(wifiAddressInput)
         root.addView(TextView(this).apply {
-            text = "Wi-Fi Pairing cần iPhone đã bật đồng bộ qua Wi-Fi/đã được ghép đôi mạng bởi hệ sinh thái Apple. Chỉ cùng Wi-Fi chưa chắc iPhone mở dịch vụ Lockdown trên mạng."
-            textSize = 12f
+            text = "Đang phát triển kết nối không dây đúng giao thức Apple: tự tìm iPhone qua Bonjour/mDNS, ghép đôi Remote Pairing trên iOS 27 trở lên và tạo đường hầm bảo mật để truyền/cài IPA. Với iPhone đã ghép đôi qua USB và bật Wi-Fi Sync, ứng dụng cũng sẽ hỗ trợ kết nối lại qua mạng khi thiết bị cho phép.\n\nBản hiện tại chưa bật cài IPA qua Wi-Fi. Không nhập IP/cổng 62078 để ghép đôi mới: kết nối Lockdown trực tiếp không thay thế quy trình Remote Pairing."
+            textSize = 13f
             setTextColor(0xFFFFD18A.toInt())
-            setPadding(0, dp(6), 0, dp(6))
-        })
-        root.addView(Button(this).apply {
-            text = "Ghép đôi iPhone qua Wi-Fi"
-            isAllCaps = false
-            setOnClickListener { startWifiPairing() }
+            setPadding(0, dp(6), 0, dp(10))
         })
         pairButton = Button(this).apply {
             text = "Ghép đôi iPhone (Lockdown)"
@@ -519,61 +502,6 @@ class DeviceConnectionActivity : Activity() {
         }, "BoSideload-lockdown-pair").apply { isDaemon = true; start() }
     }
 
-    /**
-     * Attempts ordinary Apple Lockdown pairing over the local network.
-     * The iPhone must already expose its Lockdown service over Wi-Fi.
-     * This milestone pairs and stores trust; network IPA installation is a
-     * separate follow-up and is not enabled by this button.
-     */
-    private fun startWifiPairing() {
-        val host = wifiAddressInput.text.toString().trim()
-        if (host.isBlank() || host.contains("/") || host.contains(":")) {
-            status.text = "Hãy nhập địa chỉ IPv4 hoặc tên máy hợp lệ của iPhone."
-            return
-        }
-        if (pairingInProgress) return
-        pairingInProgress = true
-        status.text = "Đang kết nối Lockdown qua Wi-Fi đến $host:62078…"
-        Thread({
-            var socket: java.net.Socket? = null
-            try {
-                socket = java.net.Socket()
-                socket.connect(java.net.InetSocketAddress(host, WIFI_LOCKDOWN_PORT), WIFI_CONNECT_TIMEOUT_MS)
-                socket.soTimeout = WIFI_IO_TIMEOUT_MS
-                val identityStore = PairingIdentityStore(this)
-                val systemBuid = identityStore.getOrCreateSystemBuid()
-                val hostId = identityStore.getOrCreateHostId()
-                val store = EncryptedPairRecordStore(this)
-                val record = socket.use { connected ->
-                    LockdownSessionChannel(
-                        connected.getInputStream(),
-                        connected.getOutputStream()
-                    ).use { channel ->
-                        AppleLockdownPairingClient { pairRecord -> store.save(pairRecord) }.pair(
-                            channel = channel,
-                            deviceId = null,
-                            systemBuid = systemBuid,
-                            hostId = hostId
-                        )
-                    }
-                }
-                runOnUiThread {
-                    pairingInProgress = false
-                    status.text = "✓ Đã ghép đôi iPhone qua Wi-Fi. UDID: ${record.deviceId}. Hồ sơ tin cậy đã được lưu mã hóa. Lưu ý: cài IPA qua Wi-Fi chưa được bật ở phiên bản này; hiện luồng cài IPA vẫn dùng USB."
-                    diagnosticReport += "\\n\\nWi-Fi Lockdown Pair: thành công; UDID=${record.deviceId}; IP=$host."
-                }
-            } catch (error: Exception) {
-                runOnUiThread {
-                    pairingInProgress = false
-                    status.text = "Ghép đôi Wi-Fi thất bại: ${error.message ?: "lỗi không xác định"}. Kiểm tra cùng mạng, IP, tường lửa và việc iPhone đã bật Wi-Fi sync/Lockdown network."
-                    diagnosticReport += "\\n\\nWi-Fi Lockdown Pair thất bại ($host): ${error.message}"
-                }
-            } finally {
-                runOnUiThread { if (!isFinishing) pairButton.isEnabled = attachedUsbmuxDeviceId != null && !attachedDeviceSerial.isNullOrBlank() }
-            }
-        }, "BoSideload-wifi-pair").apply { isDaemon = true; start() }
-    }
-
     private fun shareDiagnosticReport() {
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
@@ -606,9 +534,6 @@ class DeviceConnectionActivity : Activity() {
         internal const val KEY_LAST_VERIFIED_UDID = "last_verified_udid"
         private const val MAX_INSTALL_IPA_BYTES = 512L * 1024L * 1024L
         private const val SERVICE_IO_TIMEOUT_MS = 120_000
-        private const val WIFI_LOCKDOWN_PORT = 62078
-        private const val WIFI_CONNECT_TIMEOUT_MS = 10_000
-        private const val WIFI_IO_TIMEOUT_MS = 20_000
         private const val APPLE_VENDOR_ID = 0x05AC
     }
 }
