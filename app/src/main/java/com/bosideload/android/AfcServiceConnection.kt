@@ -74,7 +74,7 @@ internal class PairedServiceTlsSocket private constructor(
                 throw IOException("Pair record certificates are not valid under the saved root certificate", error)
             }
             val hostPrivateKey = parsePrivateKey(record.hostKeyMaterial)
-            verifyPrivateKeyMatchesCertificate(hostPrivateKey, hostCertificate)
+            verifyPairedHostPrivateKeyMatchesCertificate(hostPrivateKey, hostCertificate)
             val identity = KeyStore.getInstance(KeyStore.getDefaultType()).apply {
                 load(null)
                 setKeyEntry(
@@ -105,30 +105,6 @@ internal class PairedServiceTlsSocket private constructor(
             }
             return SSLContext.getInstance("TLS").apply {
                 init(keyManagers, arrayOf<TrustManager>(trust), null)
-            }
-        }
-
-        private fun verifyPrivateKeyMatchesCertificate(
-            privateKey: PrivateKey,
-            certificate: X509Certificate
-        ) {
-            try {
-                val challenge = ByteArray(32).also { java.security.SecureRandom().nextBytes(it) }
-                val signer = java.security.Signature.getInstance("SHA256withRSA")
-                signer.initSign(privateKey)
-                signer.update(challenge)
-                val signed = signer.sign()
-
-                val verifier = java.security.Signature.getInstance("SHA256withRSA")
-                verifier.initVerify(certificate.publicKey)
-                verifier.update(challenge)
-                if (!verifier.verify(signed)) {
-                    throw IOException("Paired host private key does not match HostCertificate")
-                }
-            } catch (error: IOException) {
-                throw error
-            } catch (error: Exception) {
-                throw IOException("Could not validate the paired host key and certificate", error)
             }
         }
 
@@ -213,5 +189,34 @@ internal class AfcServiceConnection private constructor(
                 throw IOException("Could not initialize AFC service connection", error)
             }
         }
+    }
+}
+
+/**
+ * Confirms that the saved host private key belongs to the paired HostCertificate.
+ * Kept internal so the cryptographic check can be covered by local unit tests.
+ */
+@Throws(IOException::class)
+internal fun verifyPairedHostPrivateKeyMatchesCertificate(
+    privateKey: PrivateKey,
+    certificate: X509Certificate
+) {
+    try {
+        val challenge = ByteArray(32).also { java.security.SecureRandom().nextBytes(it) }
+        val signer = java.security.Signature.getInstance("SHA256withRSA")
+        signer.initSign(privateKey)
+        signer.update(challenge)
+        val signed = signer.sign()
+
+        val verifier = java.security.Signature.getInstance("SHA256withRSA")
+        verifier.initVerify(certificate.publicKey)
+        verifier.update(challenge)
+        if (!verifier.verify(signed)) {
+            throw IOException("Paired host private key does not match HostCertificate")
+        }
+    } catch (error: IOException) {
+        throw error
+    } catch (error: Exception) {
+        throw IOException("Could not validate the paired host key and certificate", error)
     }
 }
