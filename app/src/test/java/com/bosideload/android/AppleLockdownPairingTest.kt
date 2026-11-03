@@ -36,6 +36,30 @@ class AppleLockdownPairingTest {
     }
 
     @Test
+    fun prepareRequiresAnExplicitStableHostId() {
+        assertTrue(runCatching {
+            AppleLockdownPairing.prepare(
+                deviceId = "USB-DEVICE",
+                devicePublicKeyPem = byteArrayOf(1),
+                systemBuid = "SYSTEM-BUID",
+                hostId = " "
+            )
+        }.isFailure)
+    }
+
+    @Test
+    fun prepareRejectsBlankDeviceId() {
+        assertTrue(runCatching {
+            AppleLockdownPairing.prepare(
+                deviceId = " ",
+                devicePublicKeyPem = byteArrayOf(1),
+                systemBuid = "SYSTEM-BUID",
+                hostId = "HOST-ID"
+            )
+        }.isFailure)
+    }
+
+    @Test
     fun prepareRejectsBlankSystemBuid() {
         assertTrue(runCatching {
             AppleLockdownPairing.prepare(
