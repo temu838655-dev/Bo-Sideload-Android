@@ -373,7 +373,7 @@ class DeviceConnectionActivity : Activity() {
                         )
                     }
                 )
-                ipaFile.inputStream().use { input ->
+                val installResult = ipaFile.inputStream().use { input ->
                     coordinator.install(
                         ipaInput = input,
                         ipaSizeBytes = ipaFile.length()
@@ -393,8 +393,12 @@ class DeviceConnectionActivity : Activity() {
                 runOnUiThread {
                     pairingInProgress = false
                     updatePairingActions(serial)
-                    status.text = "✓ iPhone đã báo cài đặt hoàn tất. Nếu ứng dụng chưa xuất hiện, kiểm tra thông báo iOS và trạng thái chứng chỉ."
-                    diagnosticReport += "\\n\\nInstallation Proxy: hoàn tất theo phản hồi của iPhone; IPA=${ipaFile.name}."
+                    status.text = if (installResult.stagingCleanupSucceeded) {
+                        "✓ iPhone đã báo cài đặt hoàn tất và IPA tạm đã được xóa. Nếu ứng dụng chưa xuất hiện, kiểm tra thông báo iOS và trạng thái chứng chỉ."
+                    } else {
+                        "✓ iPhone đã báo cài đặt hoàn tất, nhưng không xóa được IPA tạm. Bạn có thể xóa thủ công trong vùng PublicStaging nếu cần."
+                    }
+                    diagnosticReport += "\\n\\nInstallation Proxy: hoàn tất theo phản hồi của iPhone; IPA=${ipaFile.name}; xóa IPA tạm=${installResult.stagingCleanupSucceeded}."
                 }
             } catch (error: Exception) {
                 runOnUiThread {
