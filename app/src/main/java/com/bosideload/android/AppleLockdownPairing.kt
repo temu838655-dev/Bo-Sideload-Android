@@ -1,6 +1,5 @@
 package com.bosideload.android
 
-import java.util.UUID
 
 /**
  * Coordinates cryptographic preparation and completion of Apple's ordinary
@@ -23,7 +22,7 @@ internal object AppleLockdownPairing {
         deviceId: String,
         devicePublicKeyPem: ByteArray,
         systemBuid: String,
-        hostId: String = UUID.randomUUID().toString().uppercase()
+        hostId: String
     ): Pending {
         require(deviceId.isNotBlank()) { "device ID must not be blank" }
         require(systemBuid.isNotBlank()) { "SystemBUID must not be blank" }
