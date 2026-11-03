@@ -25,6 +25,23 @@ internal class AppleLockdownPairingClient(
         require(systemBuid.isNotBlank()) { "SystemBUID must not be blank" }
         require(hostId.isNotBlank()) { "HostID must not be blank" }
 
+        // Read the UDID from Lockdown itself and ensure the usbmux serial used
+        // as the device key refers to this same physical device.
+        val udidResponse = channel.exchange(LockdownRequests.getValue(key = DEVICE_UDID_KEY))
+        val udidSuccess = udidResponse as? LockdownResponseParser.Response.Success
+            ?: throw IOException("iPhone refused the UniqueDeviceID request")
+        if (udidSuccess.request != "GetValue") {
+            throw IOException("Lockdown returned an unexpected response to UniqueDeviceID")
+        }
+        val lockdowmUdid = (udidSuccess.value as? String)?.trim()
+            ?: throw IOException("Lockdown UniqueDeviceID was missing or had an unsupported type")
+        if (!isPlausibleUdid(lockdowmUdid)) {
+            throw IOException("Lockdown returned an invalid UniqueDeviceID")
+        }
+        if (!lockdowmUdid.equals(deviceId.trim(), ignoreCase = true)) {
+            throw IOException("USB serial does not match the iPhone UDID reported by Lockdown; reconnect the correct device")
+        }
+
         val publicKeyResponse = channel.exchange(LockdownRequests.getValue(key = DEVICE_PUBLIC_KEY_KEY))
         val publicKeySuccess = publicKeyResponse as? LockdownResponseParser.Response.Success
             ?: throw IOException("iPhone refused the DevicePublicKey request")
@@ -59,7 +76,11 @@ internal class AppleLockdownPairingClient(
         }
     }
 
+    internal fun isPlausibleUdid(value: String): Boolean =
+        value.length in 16..64 && value.all { it.isLetterOrDigit() || it == '-' }
+
     private companion object {
+        const val DEVICE_UDID_KEY = "UniqueDeviceID"
         const val DEVICE_PUBLIC_KEY_KEY = "DevicePublicKey"
         const val MAX_DEVICE_PUBLIC_KEY_BYTES = 64 * 1024
     }
