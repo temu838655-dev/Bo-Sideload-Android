@@ -69,3 +69,10 @@ The code has only been compile-checked by GitHub Actions; no physical iPhone/And
 
 
 Descriptor matching was checked against the upstream usbmuxd interface definitions: class 255 (0xFF), subclass 254 (0xFE), protocol 2 (0x02). See [upstream usb.h](https://github.com/libimobiledevice/usbmuxd/blob/master/src/usb.h) and [USB discovery implementation](https://github.com/libimobiledevice/usbmuxd/blob/master/src/usb.c). The Android adapter uses exact matching rather than the permissive OR condition found in an older upstream discovery path.
+
+
+### Lockdown request/response groundwork
+
+`LockdownRequests` now builds XML-plist envelopes for the non-mutating `QueryType` and `GetValue` requests, plus a `StartSession` request when the caller supplies HostID and SystemBUID. `LockdownResponseParser` distinguishes successful replies from explicit Lockdown errors and preserves Value, SessionID, and EnableSessionSSL fields. Unit tests cover request fields, selector validation, session identifiers, and error replies.
+
+This is protocol serialization only. It does not generate host certificates/private keys, send a Pair request, store a pairing record, perform TLS session negotiation, or establish a trusted Lockdown connection. Do not send StartSession until a valid pairing record and correct host identifiers have been obtained through Apple's normal trust workflow. Binary plist and date support remain outstanding.
