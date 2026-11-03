@@ -44,10 +44,15 @@ internal class ZsignEngine(private val context: Context) {
 
         return try {
             val binary = installEngine()
-            outputIpa.parentFile?.mkdirs()
-            outputIpa.delete()
-            val command = buildSigningCommand(binary, inputIpa, p12File, provisioningProfiles, password, outputIpa)
-            val process = ProcessBuilder(command)
+            val identity = AppleP12PemExporter.export(context, p12File, password)
+            try {
+                outputIpa.parentFile?.mkdirs()
+                outputIpa.delete()
+                val command = buildSigningCommand(
+                    binary, inputIpa, identity.privateKeyFile, identity.certificateFile,
+                    provisioningProfiles, outputIpa
+                )
+                val process = ProcessBuilder(command)
                 .directory(context.cacheDir)
                 .redirectErrorStream(true)
                 .start()
@@ -105,9 +110,12 @@ internal class ZsignEngine(private val context: Context) {
                         )
                     }
                 }
-            } else {
-                outputIpa.delete()
-                SignResult(false, null, "zsign không ký được IPA (mã thoát $exitCode).\n$details")
+                } else {
+                    outputIpa.delete()
+                    SignResult(false, null, "zsign không ký được IPA (mã thoát $exitCode).\n$details")
+                }
+            } finally {
+                identity.cleanup()
             }
         } catch (error: Exception) {
             outputIpa.delete()
@@ -246,17 +254,17 @@ internal class ZsignEngine(private val context: Context) {
         internal fun buildSigningCommand(
                 binary: File,
                 inputIpa: File,
-                p12File: File,
+                privateKeyFile: File,
+                certificateFile: File,
                 provisioningProfiles: List<File>,
-                password: String,
                 outputIpa: File
             ): List<String> {
                 require(provisioningProfiles.isNotEmpty()) { "Cần ít nhất một provisioning profile." }
                 val command = mutableListOf(
                     binary.absolutePath,
                     "-f",
-                    "-k", p12File.absolutePath,
-                    "-p", password
+                    "-k", privateKeyFile.absolutePath,
+                    "-c", certificateFile.absolutePath
                 )
                 provisioningProfiles.forEach { profile ->
                     command += "-m"
