@@ -59,3 +59,10 @@ This still does not open the Android USB interface, parse usbmux responses/devic
 `UsbMuxResponseParser` now validates plist packet message type and parses `Result`, `Attached`, and `Detached` messages. Attached-device metadata is read from the Properties dictionary with optional serial number, connection type, and product ID. Unknown message types are preserved rather than treated as successful connections. Unit tests cover success, attach/detach, unknown messages, optional metadata, and malformed responses.
 
 This parser is not yet connected to a live USB stream. The next gate is Android USB bulk endpoint I/O with permission/lifecycle handling, then a physical-device test of Listen events. Do not treat a parsed Attached message as proof of Lockdown pairing or installation capability.
+
+
+### Android USB bulk transport groundwork
+
+`AndroidUsbMuxTransport` now checks Android's USB permission, locates Apple's USBMux interface (class FE/subclass 01/protocol 02), claims it, and reads/writes complete usbmux packets over bulk IN/OUT endpoints with bounded packet lengths and a finite I/O timeout. `UsbMuxListenSession` sends the Listen plist request and exposes parsed responses/events from the transport. The caller must close the session to release the claimed interface and USB connection.
+
+This code has only been compile-checked by GitHub Actions; no physical iPhone/Android OTG test has been performed. USB interface descriptors can vary by device/OS and the transport may need device-specific handling. No UI currently starts this session, and a successful USB bulk exchange is not equivalent to a trusted Lockdown pairing.
