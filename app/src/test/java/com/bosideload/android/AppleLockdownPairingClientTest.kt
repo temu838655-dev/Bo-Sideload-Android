@@ -29,7 +29,7 @@ class AppleLockdownPairingClientTest {
     fun readsDevicePublicKeyPairsAndPersistsOnlyAfterPairSuccess() {
         val escrow = byteArrayOf(4, 5, 6)
         val input = ByteArrayInputStream(
-            response(mapOf("Request" to "GetValue", "Value" to "TEST-UDID")) +
+            response(mapOf("Request" to "GetValue", "Value" to "00008030-001C195E0E91802E")) +
                 response(mapOf("Request" to "GetValue", "Value" to publicKeyPem())) +
                 response(mapOf("Request" to "Pair", "EscrowBag" to escrow))
         )
@@ -39,13 +39,13 @@ class AppleLockdownPairingClientTest {
 
         val record = client.pair(
             LockdownSessionChannel(input, output),
-            deviceId = "TEST-UDID",
+            deviceId = "00008030-001C195E0E91802E",
             systemBuid = "11111111-2222-3333-4444-555555555555",
             hostId = "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE"
         )
 
         assertNotNull(persisted)
-        assertEquals("TEST-UDID", record.deviceId)
+        assertEquals("00008030-001C195E0E91802E", record.deviceId)
         assertEquals("AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE", record.hostId)
         assertArrayEquals(escrow, record.escrowBag)
         assertArrayEquals(record.hostKeyMaterial, persisted!!.hostKeyMaterial)
@@ -63,7 +63,7 @@ class AppleLockdownPairingClientTest {
         assertThrows(IOException::class.java) {
             client.pair(
                 LockdownSessionChannel(input, ByteArrayOutputStream()),
-                "TEST-UDID",
+                "00008030-001C195E0E91802E",
                 "11111111-2222-3333-4444-555555555555",
                 "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE"
             )
@@ -74,7 +74,7 @@ class AppleLockdownPairingClientTest {
     @Test
     fun doesNotPersistWhenDeviceRejectsPairRequest() {
         val input = ByteArrayInputStream(
-            response(mapOf("Request" to "GetValue", "Value" to "TEST-UDID")) +
+            response(mapOf("Request" to "GetValue", "Value" to "00008030-001C195E0E91802E")) +
                 response(mapOf("Request" to "GetValue", "Value" to publicKeyPem())) +
                 response(mapOf("Request" to "Pair", "Error" to "PairingProhibited"))
         )
@@ -84,7 +84,7 @@ class AppleLockdownPairingClientTest {
         assertThrows(IOException::class.java) {
             client.pair(
                 LockdownSessionChannel(input, ByteArrayOutputStream()),
-                "TEST-UDID",
+                "00008030-001C195E0E91802E",
                 "11111111-2222-3333-4444-555555555555",
                 "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE"
             )
