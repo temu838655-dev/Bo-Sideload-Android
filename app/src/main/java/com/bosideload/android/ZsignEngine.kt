@@ -116,7 +116,7 @@ internal class ZsignEngine(private val context: Context) {
                     lines.forEach { line ->
                         synchronized(output) {
                             if (output.length < MAX_VERSION_OUTPUT_CHARS) {
-                                output.append(line).append('\\n')
+                                output.append(line).append('\n')
                             }
                         }
                     }
