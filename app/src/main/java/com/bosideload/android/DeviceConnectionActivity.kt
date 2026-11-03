@@ -19,6 +19,7 @@ import android.widget.TextView
 /** USB discovery and ordinary Apple Lockdown pairing. IPA installation is wired to this screen but still requires real-device validation. */
 class DeviceConnectionActivity : Activity() {
     private lateinit var usbManager: UsbManager
+    private lateinit var pairRecordStore: EncryptedPairRecordStore
     private lateinit var status: TextView
     private lateinit var devicesPanel: LinearLayout
     private lateinit var wifiDevicesPanel: LinearLayout
@@ -64,6 +65,7 @@ class DeviceConnectionActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         usbManager = getSystemService(Context.USB_SERVICE) as UsbManager
+        pairRecordStore = EncryptedPairRecordStore(this)
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(24), dp(20), dp(24))
@@ -132,13 +134,32 @@ class DeviceConnectionActivity : Activity() {
                                     setPadding(dp(12), dp(10), dp(12), dp(10))
                                     setBackgroundColor(0xFF162135.toInt())
                                 }
+                                val storedRecords = pairRecordStore.listDeviceIds().mapNotNull { deviceId ->
+                                    runCatching { pairRecordStore.load(deviceId) }.getOrNull()
+                                }
+                                val match = AppleWifiPairingMatcher.findMatch(device.txtRecord, storedRecords)
                                 card.addView(TextView(this@DeviceConnectionActivity).apply {
-                                    text = "Dịch vụ Bonjour: ${device.serviceName}\nĐịa chỉ mạng: ${device.hostAddress}:${device.port}\nTXT keys: ${device.txtKeys.sorted().joinToString().ifBlank { "không có" }}\nChưa xác thực danh tính — chưa thể kết nối hoặc cài IPA."
+                                    text = buildString {
+                                        append("Dịch vụ Bonjour: ${device.serviceName}")
+                                        append("\\nĐịa chỉ mạng: ${device.hostAddress}:${device.port}")
+                                        if (match != null) {
+                                            append("\\nĐÃ KHỚP pairing record: ${match.deviceId}")
+                                            append("\\nĐã xác định ứng viên theo authTag; vẫn phải xác thực TLS trước khi truyền dữ liệu.")
+                                        } else {
+                                            append("\\nCHƯA KHỚP pairing record đã lưu.")
+                                            append("\\nKhông kết nối đến dịch vụ này và không gửi thông tin pairing.")
+                                        }
+                                        append("\\nTXT identifier: ${if (device.txtRecord.containsKey("identifier")) "có" else "thiếu"}")
+                                    }
                                     textSize = 13f
                                     setTextColor(-1)
                                 })
                                 wifiDevicesPanel.addView(card, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
-                                status.text = "Đã phát hiện dịch vụ Apple trên Wi-Fi. Thiết bị vẫn cần xác thực bằng pairing record trước khi kết nối."
+                                status.text = if (match != null) {
+                                    "Đã khớp quảng bá Wi-Fi với pairing record đã lưu. Bước xác thực TLS chưa được thực hiện."
+                                } else {
+                                    "Đã thấy dịch vụ Apple nhưng chưa khớp pairing record. Ứng dụng sẽ không kết nối."
+                                }
                             }
                         }
 
