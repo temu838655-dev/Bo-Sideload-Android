@@ -33,6 +33,35 @@ class LockdownRequestsTest {
         assertEquals("SYSTEM-BUID", message["SystemBUID"])
     }
 
+    @Test fun pairRequestContainsOnlyPublicCertificatesAndIdentifiers() {
+        val message = decode(LockdownRequests.pair(
+            "DEVICE-CERT".toByteArray(),
+            "HOST-CERT".toByteArray(),
+            "ROOT-CERT".toByteArray(),
+            "HOST-ID",
+            "SYSTEM-BUID"
+        ))
+        assertEquals("Pair", message["Request"])
+        assertEquals("2", message["ProtocolVersion"])
+        val pairRecord = message["PairRecord"] as Map<*, *>
+        assertEquals("DEVICE-CERT", String(pairRecord["DeviceCertificate"] as ByteArray))
+        assertEquals("HOST-CERT", String(pairRecord["HostCertificate"] as ByteArray))
+        assertEquals("ROOT-CERT", String(pairRecord["RootCertificate"] as ByteArray))
+        assertEquals("HOST-ID", pairRecord["HostID"])
+        assertEquals("SYSTEM-BUID", pairRecord["SystemBUID"])
+        assertFalse(pairRecord.containsKey("HostPrivateKey"))
+        assertFalse(pairRecord.containsKey("RootPrivateKey"))
+    }
+
+    @Test fun pairRequestRejectsMissingCertificatesOrIdentifiers() {
+        assertTrue(runCatching {
+            LockdownRequests.pair(byteArrayOf(), byteArrayOf(1), byteArrayOf(1), "H", "B")
+        }.isFailure)
+        assertTrue(runCatching {
+            LockdownRequests.pair(byteArrayOf(1), byteArrayOf(1), byteArrayOf(1), "", "B")
+        }.isFailure)
+    }
+
     @Test fun rejectsBlankSessionIdentifiers() {
         assertTrue(runCatching { LockdownRequests.startSession("", "BUID") }.isFailure)
         assertTrue(runCatching { LockdownRequests.startSession("HOST", " ") }.isFailure)
