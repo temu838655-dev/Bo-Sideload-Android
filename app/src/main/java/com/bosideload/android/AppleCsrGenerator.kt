@@ -10,10 +10,9 @@ import java.io.StringWriter
 import java.security.KeyPair
 import java.security.KeyPairGenerator
 import java.security.Security
-import java.security.spec.ECGenParameterSpec
 
 /**
- * Generates a P-256 keypair and PKCS#10 CSR locally.
+ * Generates an RSA-2048 keypair and PKCS#10 CSR locally.
  *
  * Note: Apple certificate type compatibility must be validated before using
  * this CSR with a production certificate-creation request.
@@ -25,13 +24,13 @@ internal object AppleCsrGenerator {
         if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
             Security.addProvider(BouncyCastleProvider())
         }
-        val generator = KeyPairGenerator.getInstance("EC", BouncyCastleProvider.PROVIDER_NAME)
-        generator.initialize(ECGenParameterSpec("secp256r1"))
+        val generator = KeyPairGenerator.getInstance("RSA", BouncyCastleProvider.PROVIDER_NAME)
+        generator.initialize(2048)
         val pair: KeyPair = generator.generateKeyPair()
 
         val subject = X500Name("CN=" + commonName.replace(",", " ").take(64))
         val csrBuilder = JcaPKCS10CertificationRequestBuilder(subject, pair.public)
-        val signer = JcaContentSignerBuilder("SHA256withECDSA")
+        val signer = JcaContentSignerBuilder("SHA256withRSA")
             .setProvider(BouncyCastleProvider.PROVIDER_NAME)
             .build(pair.private)
         val csr = csrBuilder.build(signer)
