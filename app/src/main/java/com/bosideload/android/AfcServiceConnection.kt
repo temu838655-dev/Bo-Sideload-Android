@@ -20,8 +20,9 @@ import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter
 /**
  * TLS upgrade for a Lockdown StartService endpoint.
  *
- * Apple service TLS presents the paired HostCertificate/HostPrivateKey as
- * the client identity. The peer certificate is pinned to the paired device cert.
+ * Apple service TLS presents the paired RootCertificate/RootPrivateKey as
+ * the client identity (matching libimobiledevice's Lockdown TLS implementation).
+ * The peer certificate is pinned to the paired DeviceCertificate.
  * This performs TLS directly on the newly connected service stream; it does
  * not send a second Lockdown StartSession request.
  */
