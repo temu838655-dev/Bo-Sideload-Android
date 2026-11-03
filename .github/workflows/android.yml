@@ -53,7 +53,12 @@ jobs:
           name: Bo-Sideload-debug
           path: app/build/outputs/apk/debug/*.apk
       - name: Publish GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'nightly' }}
+          name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'Bo-Sideload nightly' }}
+          target_commitish: main
+          prerelease: ${{ !startsWith(github.ref, 'refs/tags/') }}
+          make_latest: false
           files: app/build/outputs/apk/debug/*.apk
