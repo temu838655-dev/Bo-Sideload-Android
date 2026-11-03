@@ -42,7 +42,8 @@ internal class SideloadInstallCoordinator(
         val cleanupDescriptor = openLockdownSession().use { lockdown ->
             LockdownServiceStarter.start(
                 channel = lockdown.channel,
-                identifier = AfcServiceConnection.AFC_SERVICE_IDENTIFIER
+                identifier = AfcServiceConnection.AFC_SERVICE_IDENTIFIER,
+                escrowBag = pairRecord.escrowBag
             )
         }
         AfcServiceConnection.open(
@@ -76,7 +77,8 @@ internal class SideloadInstallCoordinator(
         val afcDescriptor = openLockdownSession().use { lockdown ->
             LockdownServiceStarter.start(
                 channel = lockdown.channel,
-                identifier = AfcServiceConnection.AFC_SERVICE_IDENTIFIER
+                identifier = AfcServiceConnection.AFC_SERVICE_IDENTIFIER,
+                escrowBag = pairRecord.escrowBag
             )
         }
         val upload: AfcClient.UploadResult
@@ -106,7 +108,8 @@ internal class SideloadInstallCoordinator(
             val installationDescriptor = openLockdownSession().use { lockdown ->
                 LockdownServiceStarter.start(
                     channel = lockdown.channel,
-                    identifier = InstallationProxyServiceConnection.SERVICE_IDENTIFIER
+                    identifier = InstallationProxyServiceConnection.SERVICE_IDENTIFIER,
+                    escrowBag = pairRecord.escrowBag
                 )
             }
             InstallationProxyServiceConnection.open(
