@@ -34,7 +34,7 @@ class DeviceConnectionActivity : Activity() {
                 refreshDevices()
                 if (!granted && requestedId != null) {
                     status.text = "Bạn đã từ chối quyền USB cho thiết bị ID $requestedId. Hãy cấp quyền nếu muốn xem interface và endpoint."
-                    diagnosticReport += "\\n\\nKết quả xin quyền USB: bị từ chối (deviceId=$requestedId)."
+                    diagnosticReport += "\n\nKết quả xin quyền USB: bị từ chối (deviceId=$requestedId)."
                 } else if (granted) {
                     status.text = "Đã được cấp quyền USB. Đang hiển thị thông tin interface và endpoint."
                 }
