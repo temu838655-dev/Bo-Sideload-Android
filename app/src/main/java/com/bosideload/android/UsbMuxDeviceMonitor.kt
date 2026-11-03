@@ -23,6 +23,7 @@ internal class UsbMuxDeviceMonitor(
     }
 
     private val stopped = AtomicBoolean(false)
+    private val sessionLock = Any()
     @Volatile private var session: UsbMuxListenSession? = null
     @Volatile private var worker: Thread? = null
 
@@ -42,7 +43,20 @@ internal class UsbMuxDeviceMonitor(
             listener.onStatus("Đang mở giao diện USBMux của Apple…")
             val transport = AndroidUsbMuxTransport.open(usbManager, device, timeoutMs = 0)
             val activeSession = UsbMuxListenSession(transport)
-            session = activeSession
+            // Publish the session atomically with respect to close(). If close()
+            // wins while USB is opening, do not start a listener on a stopped monitor.
+            val shouldStart = synchronized(sessionLock) {
+                if (stopped.get()) {
+                    false
+                } else {
+                    session = activeSession
+                    true
+                }
+            }
+            if (!shouldStart) {
+                activeSession.close()
+                return
+            }
             activeSession.start()
             listener.onStatus("Đã gửi yêu cầu usbmux Listen. Đang chờ iPhone phản hồi…")
             while (!stopped.get()) {
@@ -67,8 +81,12 @@ internal class UsbMuxDeviceMonitor(
                 listener.onError(error.message ?: "Không thể duy trì phiên USBMux.")
             }
         } finally {
+            synchronized(sessionLock) {
+                synchronized(sessionLock) {
             try { session?.close() } catch (_: Exception) { }
-            session = null
+        }
+                session = null
+            }
             if (stopped.get()) listener.onStatus("Đã dừng theo dõi usbmux.")
         }
     }
