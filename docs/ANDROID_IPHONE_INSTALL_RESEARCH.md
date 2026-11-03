@@ -63,6 +63,9 @@ This parser is not yet connected to a live USB stream. The next gate is Android 
 
 ### Android USB bulk transport groundwork
 
-`AndroidUsbMuxTransport` now checks Android's USB permission, locates Apple's USBMux interface (class FE/subclass 01/protocol 02), claims it, and reads/writes complete usbmux packets over bulk IN/OUT endpoints with bounded packet lengths and a finite I/O timeout. `UsbMuxListenSession` sends the Listen plist request and exposes parsed responses/events from the transport. The caller must close the session to release the claimed interface and USB connection.
+`AndroidUsbMuxTransport` now checks Android's USB permission, locates Apple's USBMux vendor-specific interface (class FF/subclass FE/protocol 02), claims it, and reads/writes complete usbmux packets over bulk IN/OUT endpoints with bounded packet lengths and a finite I/O timeout. `UsbMuxListenSession` sends the Listen plist request and exposes parsed responses/events from the transport. The caller must close the session to release the claimed interface and USB connection.
 
 This code has only been compile-checked by GitHub Actions; no physical iPhone/Android OTG test has been performed. USB interface descriptors can vary by device/OS and the transport may need device-specific handling. No UI currently starts this session, and a successful USB bulk exchange is not equivalent to a trusted Lockdown pairing.
+
+
+Descriptor matching was checked against the upstream usbmuxd interface definitions: class 255 (0xFF), subclass 254 (0xFE), protocol 2 (0x02). See [upstream usb.h](https://github.com/libimobiledevice/usbmuxd/blob/master/src/usb.h) and [USB discovery implementation](https://github.com/libimobiledevice/usbmuxd/blob/master/src/usb.c). The Android adapter uses exact matching rather than the permissive OR condition found in an older upstream discovery path.
