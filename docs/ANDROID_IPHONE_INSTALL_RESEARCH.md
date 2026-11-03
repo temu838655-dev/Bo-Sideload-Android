@@ -92,6 +92,9 @@ The Lockdown plist decoder now detects Apple's `bplist00` signature and uses the
  
 ### Encrypted pairing-record storage groundwork
 
-A versioned pairing-record model and bounded serializer have been added. The Android storage layer encrypts the serialized record with a per-device AES-256-GCM key held by Android Keystore; the key is non-exportable, the device identifier is authenticated as GCM additional data, and only the IV plus ciphertext is stored in private app preferences. Removing a record also removes its Keystore alias. If the Keystore key is missing or authentication fails, the store reports an error rather than silently accepting or replacing the record.
+A versioned pairing-record model and bounded serializer have been added for the device/host identifiers, host and root certificates, corresponding host/root key material, device certificate, and optional escrow bag. The Android storage layer encrypts the serialized record with a per-device AES-256-GCM key held by Android Keystore; the key is non-exportable, the device identifier is authenticated as GCM additional data, and only the IV plus ciphertext is stored in private app preferences. Removing a record also removes its Keystore alias. If the Keystore key is missing or authentication fails, the store reports an error rather than silently accepting or replacing the record.
 
 This is storage infrastructure only. The application does not yet generate Apple's required certificates, send a Pair request, receive a real PairRecord, or use this store in a completed pairing flow. The record model must be populated only from a successful, user-approved Apple pairing exchange. No pairing bypass is implemented.
+
+
+The record serializer has round-trip and malformed-input unit tests. Android Keystore encryption itself still needs instrumentation testing on supported Android devices; JVM unit tests cannot prove hardware-backed key behavior or recovery after device backup/restore.
