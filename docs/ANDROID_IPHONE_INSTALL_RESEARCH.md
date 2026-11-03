@@ -36,7 +36,7 @@ The Android app now contains small, bounded framing helpers with unit tests:
 - `UsbMuxPacketCodec`: reads/writes complete usbmux packets and rejects oversized or truncated packets.
 - `LockdownPacketCodec`: reads/writes the 4-byte big-endian length-prefixed Lockdown payload framing and rejects negative, oversized, or truncated payloads.
 
-These are protocol building blocks only. They do not yet serialize/parse Apple plist messages, open an Android USB bulk transport, issue usbmux Listen/Connect requests, complete the Lockdown StartSession/Pair flow, create or store a pairing record, start the Installation Proxy service, or install an application. No UI should describe USB detection as a trusted iPhone connection.
+These are protocol building blocks only. They do not yet serialize/parse Apple plist messages, open an Android USB bulk transport, complete the Lockdown StartSession/Pair flow, create or store a pairing record, start the Installation Proxy service, or install an application. No UI should describe USB detection as a trusted iPhone connection.
 
 The next implementation gate is a real transport adapter plus plist request/response handling, followed by a pairing flow tested with a physical iPhone and explicit user approval. Keep pairing records protected by Android Keystore-backed encryption and never log pairing secrets.
 
@@ -45,3 +45,10 @@ The next implementation gate is a real transport adapter plus plist request/resp
 A bounded XML plist codec has now been added for the Lockdown message layer. It supports dictionaries, arrays, strings, integers, real numbers, booleans, and base64 data. Parsing accepts Apple's standard plist DOCTYPE while disabling external entity and external DTD access; payload size, nesting depth, and parsed value count are limited. Unit tests cover round trips, standard Apple XML, XML escaping, malformed dictionaries, duplicate keys, unsupported values, size limits, and external-entity isolation.
 
 This remains a serialization layer only. It does not send a Lockdown request, authenticate the host, or establish a trusted session. Binary plist and date values are not supported by this codec yet; responses using those values must be handled before claiming general Lockdown compatibility.
+
+
+### usbmux plist request groundwork
+
+`UsbMuxPlistRequests` now builds protocol-v1 plist packets for `Listen` and `Connect`, including client metadata fields used by libusbmuxd. Connect validates the device ID and TCP port and applies the required `htons`-style byte swap to `PortNumber`. Unit tests decode the generated plist payloads and verify the packet message type and tag.
+
+This still does not open the Android USB interface, parse usbmux responses/device attach events, or connect to a device port. The request builders must be integrated with a real Android USB Host transport and tested against physical iPhones before the connection UI can be considered functional.
