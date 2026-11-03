@@ -103,7 +103,7 @@ class DeviceConnectionActivity : Activity() {
         })
         wifiAddressInput = EditText(this).apply {
             hint = "Địa chỉ IP iPhone (ví dụ 192.168.1.25)"
-            singleLine = true
+            setSingleLine(true)
             inputType = android.text.InputType.TYPE_CLASS_TEXT
             setTextColor(-1)
             setHintTextColor(0xFF9EABC0.toInt())
