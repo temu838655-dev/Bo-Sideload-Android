@@ -23,6 +23,8 @@ class DeviceConnectionActivity : Activity() {
     private lateinit var devicesPanel: LinearLayout
     private var diagnosticReport: String = "Chưa có dữ liệu USB."
     private var pendingPermissionDeviceId: Int? = null
+    private var activeMonitor: UsbMuxDeviceMonitor? = null
+    private var activeMonitorDeviceId: Int? = null
     private val permissionAction = "com.bosideload.android.USB_PERMISSION"
 
     private val permissionReceiver = object : BroadcastReceiver() {
@@ -91,7 +93,7 @@ class DeviceConnectionActivity : Activity() {
             setOnClickListener { shareDiagnosticReport() }
         })
         root.addView(TextView(this).apply {
-            text = "Giới hạn: màn hình này dò USB và xin quyền Android. Chưa có ghép đôi Apple Lockdown/usbmuxd, đọc thông tin iPhone hoặc cài IPA. Thấy USB không có nghĩa là iPhone đã kết nối tin cậy."
+            text = "Giới hạn: màn hình này dò USB và xin quyền Android. Đã có thử nghiệm phiên usbmux Listen ở mức nền tảng. Chưa có ghép đôi Apple Lockdown hoặc cài IPA. Thấy USB không có nghĩa là iPhone đã kết nối tin cậy."
             textSize = 13f
             setTextColor(0xFFFFD18A.toInt())
             setPadding(0, dp(18), 0, dp(12))
@@ -112,6 +114,9 @@ class DeviceConnectionActivity : Activity() {
 
     override fun onDestroy() {
         try { unregisterReceiver(permissionReceiver) } catch (_: Exception) { }
+        activeMonitor?.close()
+        activeMonitor = null
+        activeMonitorDeviceId = null
         super.onDestroy()
     }
 
@@ -170,6 +175,48 @@ class DeviceConnectionActivity : Activity() {
                     text = "Cấp quyền truy cập USB"
                     isAllCaps = false
                     setOnClickListener { requestUsbPermission(device) }
+                })
+            } else if (apple) {
+                card.addView(Button(this).apply {
+                    isAllCaps = false
+                    text = if (activeMonitorDeviceId == device.deviceId) "Dừng theo dõi usbmux" else "Thử kết nối usbmux"
+                    setOnClickListener {
+                        if (activeMonitorDeviceId == device.deviceId) {
+                            activeMonitor?.close()
+                            activeMonitor = null
+                            activeMonitorDeviceId = null
+                            text = "Thử kết nối usbmux"
+                            status.text = "Đã yêu cầu dừng phiên usbmux."
+                        } else {
+                            activeMonitor?.close()
+                            val monitor = UsbMuxDeviceMonitor(usbManager, device, object : UsbMuxDeviceMonitor.Listener {
+                                override fun onStatus(message: String) {
+                                    runOnUiThread { status.text = message }
+                                }
+                                override fun onDeviceAttached(deviceInfo: UsbMuxResponseParser.Device) {
+                                    runOnUiThread {
+                                        status.text = buildString {
+                                            append("usbmux báo thiết bị Attached. DeviceID: ").append(deviceInfo.deviceId)
+                                            deviceInfo.serialNumber?.let { append("\\nSerial: ").append(it) }
+                                            deviceInfo.connectionType?.let { append("\\nKiểu kết nối: ").append(it) }
+                                            deviceInfo.productId?.let { append("\\nProduct ID: ").append(hex(it.toInt())) }
+                                            append("\\nĐây chưa phải xác nhận Lockdown pairing.")
+                                        }
+                                    }
+                                }
+                                override fun onDeviceDetached(deviceId: Long) {
+                                    runOnUiThread { status.text = "usbmux báo thiết bị Detached (DeviceID=$deviceId)." }
+                                }
+                                override fun onError(message: String) {
+                                    runOnUiThread { status.text = "Không thể kết nối usbmux: $message" }
+                                }
+                            })
+                            activeMonitor = monitor
+                            activeMonitorDeviceId = device.deviceId
+                            text = "Dừng theo dõi usbmux"
+                            monitor.start()
+                        }
+                    }
                 })
             }
             devicesPanel.addView(card, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
