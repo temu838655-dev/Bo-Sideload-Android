@@ -1,0 +1,175 @@
+package com.bosideload.android
+
+import java.io.Closeable
+import java.io.IOException
+import java.io.StringReader
+import java.net.Socket
+import java.security.KeyStore
+import java.security.MessageDigest
+import java.security.PrivateKey
+import java.security.cert.CertificateFactory
+import java.security.cert.X509Certificate
+import javax.net.ssl.KeyManagerFactory
+import javax.net.ssl.SSLContext
+import javax.net.ssl.SSLSocket
+import javax.net.ssl.TrustManager
+import javax.net.ssl.X509TrustManager
+import org.bouncycastle.openssl.PEMParser
+import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter
+
+/**
+ * TLS upgrade for a Lockdown StartService endpoint.
+ *
+ * Apple service TLS uses the paired RootCertificate/RootPrivateKey as the
+ * client identity. The peer certificate is pinned to the paired device cert.
+ * This performs TLS directly on the newly connected service stream; it does
+ * not send a second Lockdown StartSession request.
+ */
+internal class PairedServiceTlsSocket private constructor(
+    private val socket: SSLSocket
+) : Closeable {
+    val inputStream get() = socket.inputStream
+    val outputStream get() = socket.outputStream
+
+    override fun close() = socket.close()
+
+    companion object {
+        @Throws(IOException::class)
+        fun upgrade(connectSession: UsbMuxConnectSession, record: PairRecord): PairedServiceTlsSocket {
+            record.validate()
+            val transportSocket = StreamBackedSocket(
+                connectSession.inputStream,
+                connectSession.outputStream
+            ) { connectSession.close() }
+            try {
+                val context = createContext(record)
+                val ssl = context.socketFactory.createSocket(
+                    transportSocket,
+                    "paired-apple-service",
+                    0,
+                    true
+                ) as SSLSocket
+                ssl.useClientMode = true
+                ssl.startHandshake()
+                return PairedServiceTlsSocket(ssl)
+            } catch (error: Exception) {
+                runCatching { transportSocket.close() }
+                throw IOException("Paired service TLS handshake failed", error)
+            }
+        }
+
+        private fun createContext(record: PairRecord): SSLContext {
+            val rootCertificate = parseCertificate(record.rootCertificate)
+            val deviceCertificate = parseCertificate(record.deviceCertificate)
+            val rootPrivateKey = parsePrivateKey(record.rootKeyMaterial)
+            val identity = KeyStore.getInstance(KeyStore.getDefaultType()).apply {
+                load(null)
+                setKeyEntry("bo-service-root", rootPrivateKey, CharArray(0), arrayOf(rootCertificate))
+            }
+            val keyManagers = KeyManagerFactory.getInstance(
+                KeyManagerFactory.getDefaultAlgorithm()
+            ).apply { init(identity, CharArray(0)) }.keyManagers
+            val trust = object : X509TrustManager {
+                override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf(deviceCertificate)
+                override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {
+                    throw java.security.cert.CertificateException("client trust is not used")
+                }
+                override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {
+                    if (chain.isNullOrEmpty()) {
+                        throw java.security.cert.CertificateException("service supplied no peer certificate")
+                    }
+                    val expected = fingerprint(deviceCertificate)
+                    if (chain.none { fingerprint(it) == expected }) {
+                        throw java.security.cert.CertificateException("service certificate does not match paired iPhone")
+                    }
+                    deviceCertificate.checkValidity()
+                }
+            }
+            return SSLContext.getInstance("TLS").apply {
+                init(keyManagers, arrayOf<TrustManager>(trust), null)
+            }
+        }
+
+        private fun parseCertificate(bytes: ByteArray): X509Certificate {
+            require(bytes.isNotEmpty() && bytes.size <= PairRecordCodec.MAX_FIELD_BYTES)
+            return CertificateFactory.getInstance("X.509")
+                .generateCertificate(bytes.inputStream()) as X509Certificate
+        }
+
+        private fun parsePrivateKey(bytes: ByteArray): PrivateKey {
+            require(bytes.isNotEmpty() && bytes.size <= PairRecordCodec.MAX_FIELD_BYTES)
+            PEMParser(StringReader(String(bytes, Charsets.US_ASCII))).use { parser ->
+                val value = parser.readObject()
+                    ?: throw IllegalArgumentException("paired root private key is empty")
+                val converter = JcaPEMKeyConverter()
+                return when (value) {
+                    is org.bouncycastle.openssl.PEMKeyPair -> converter.getKeyPair(value).private
+                    is org.bouncycastle.asn1.pkcs.PrivateKeyInfo -> converter.getPrivateKey(value)
+                    else -> throw IllegalArgumentException("unsupported paired root private key PEM")
+                }
+            }
+        }
+
+        private fun fingerprint(certificate: X509Certificate): String =
+            MessageDigest.getInstance("SHA-256").digest(certificate.encoded)
+                .joinToString("") { "%02x".format(it) }
+    }
+}
+
+/**
+ * Owns a fresh usbmux Connect transport and its optional service TLS layer.
+ * Construct this only after StartService succeeded on an authenticated
+ * Lockdown channel.
+ */
+internal class AfcServiceConnection private constructor(
+    private val connectSession: UsbMuxConnectSession,
+    private val tlsSession: PairedServiceTlsSocket?,
+    val client: AfcClient
+) : Closeable {
+    override fun close() {
+        try {
+            client.close()
+        } finally {
+            try {
+                tlsSession?.close()
+            } finally {
+                if (tlsSession == null) connectSession.close()
+            }
+        }
+    }
+
+    companion object {
+        const val AFC_SERVICE_IDENTIFIER = "com.apple.afc"
+
+        @Throws(IOException::class)
+        fun open(
+            transport: UsbMuxTransport,
+            deviceId: Long,
+            descriptor: LockdownServiceStarter.ServiceDescriptor,
+            record: PairRecord
+        ): AfcServiceConnection {
+            if (descriptor.identifier != AFC_SERVICE_IDENTIFIER) {
+                runCatching { transport.close() }
+                throw IOException("service descriptor is not com.apple.afc")
+            }
+            val connect = UsbMuxConnectSession.connect(
+                transport = transport,
+                deviceId = deviceId,
+                devicePort = descriptor.port
+            )
+            try {
+                val tls = if (descriptor.enableServiceSsl) {
+                    PairedServiceTlsSocket.upgrade(connect, record)
+                } else null
+                val input = tls?.inputStream ?: connect.inputStream
+                val output = tls?.outputStream ?: connect.outputStream
+                val client = AfcClient(input, output)
+                return AfcServiceConnection(connect, tls, client)
+            } catch (error: Exception) {
+                runCatching { connect.close() }
+                if (error is IOException) throw error
+                throw IOException("Could not initialize AFC service connection", error)
+            }
+        }
+    }
+}
