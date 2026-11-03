@@ -241,8 +241,11 @@ class DeviceConnectionActivity : Activity() {
                                         if (attachedUsbmuxDeviceId == deviceId) {
                                             attachedUsbmuxDeviceId = null
                                             attachedDeviceSerial = null
+                                            attachedAppleDevice = null
                                             pairButton.isEnabled = false
                                             installButton.isEnabled = false
+                                            pairButton.text = "Chưa có iPhone — kết nối lại để ghép đôi"
+                                            installButton.text = "Kết nối lại iPhone để cài IPA"
                                         }
                                     }
                                 }
