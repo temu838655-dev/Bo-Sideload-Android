@@ -38,6 +38,23 @@ class AppleConnectActivity : Activity() {
         page.addView(label(
             "Chỉ dành cho Apple Developer Program có Team API Key. Không nhập Apple ID, mật khẩu hoặc mã 2FA. Tệp .p8 được mã hóa bằng Android Keystore và lưu trên thiết bị; không gửi lên GitHub hoặc máy chủ Bo Sideload.",
             14, 0xFFB8C5D8.toInt(), false), full())
+        page.addView(label(
+            "Bạn dùng Apple ID miễn phí? Hãy đăng nhập trực tiếp trên trang Apple chính thức bên dưới. Ứng dụng không nhận hoặc lưu mật khẩu Apple ID. Đăng nhập miễn phí không tự cấp Team API Key; tính năng API tự động bên dưới yêu cầu Apple Developer Program trả phí và Team API Key.",
+            13, 0xFFFFD28A.toInt(), false), full())
+        page.addView(Button(this).apply {
+            text = "Đăng nhập Apple ID trên trang Apple chính thức"
+            isAllCaps = false
+            setOnClickListener {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://developer.apple.com/account/")))
+            }
+        }, full())
+        page.addView(Button(this).apply {
+            text = "Tìm hiểu / đăng ký Apple Developer Program"
+            isAllCaps = false
+            setOnClickListener {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://developer.apple.com/programs/")))
+            }
+        }, full())
         keyId = field("Key ID")
         issuerId = field("Issuer ID")
         page.addView(keyId, full()); page.addView(issuerId, full())
