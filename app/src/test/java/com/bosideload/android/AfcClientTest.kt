@@ -86,7 +86,7 @@ class AfcClientTest {
             operations += header.operation
             offset += header.entireLength.toInt()
         }
-        assertEquals(listOf(0x0DL, 0x14L), operations)
+        assertEquals(listOf(0x0DL, 0x10L, 0x14L), operations)
     }
 
 
