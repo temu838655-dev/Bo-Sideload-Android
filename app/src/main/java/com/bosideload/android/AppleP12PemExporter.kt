@@ -97,18 +97,23 @@ internal object AppleP12PemExporter {
             else -> throw IllegalArgumentException("Loại private key không được hỗ trợ: ${privateKey.algorithm}")
         }
         val challenge = ByteArray(32).also { java.security.SecureRandom().nextBytes(it) }
-        val signer = Signature.getInstance(algorithm)
-        signer.initSign(privateKey)
-        signer.update(challenge)
-        val signed = signer.sign()
-        val verifier = Signature.getInstance(algorithm)
-        verifier.initVerify(certificate.publicKey)
-        verifier.update(challenge)
-        require(verifier.verify(signed)) {
-            "Private key trong P12 không khớp certificate."
+        var signed: ByteArray? = null
+        try {
+            val signer = Signature.getInstance(algorithm)
+            signer.initSign(privateKey)
+            signer.update(challenge)
+            signed = signer.sign()
+
+            val verifier = Signature.getInstance(algorithm)
+            verifier.initVerify(certificate.publicKey)
+            verifier.update(challenge)
+            require(verifier.verify(signed)) {
+                "Private key trong P12 không khớp certificate."
+            }
+        } finally {
+            challenge.fill(0)
+            signed?.fill(0)
         }
-        challenge.fill(0)
-        signed.fill(0)
     }
 
     private fun writePem(file: File, label: String, bytes: ByteArray) {
