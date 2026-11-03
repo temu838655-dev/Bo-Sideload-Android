@@ -36,6 +36,18 @@ class AppleLockdownPairingTest {
     }
 
     @Test
+    fun prepareRejectsBlankSystemBuid() {
+        assertTrue(runCatching {
+            AppleLockdownPairing.prepare(
+                deviceId = "USB-DEVICE",
+                devicePublicKeyPem = byteArrayOf(1),
+                systemBuid = " ",
+                hostId = "HOST-ID"
+            )
+        }.isFailure)
+    }
+
+    @Test
     fun completePersistsOnlyAfterSuccessfulPairResponse() {
         val pending = AppleLockdownPairing.prepare(
             "USB-DEVICE-8",
