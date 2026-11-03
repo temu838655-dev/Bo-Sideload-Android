@@ -82,9 +82,7 @@ internal class UsbMuxDeviceMonitor(
             }
         } finally {
             synchronized(sessionLock) {
-                synchronized(sessionLock) {
-            try { session?.close() } catch (_: Exception) { }
-        }
+                try { session?.close() } catch (_: Exception) { }
                 session = null
             }
             if (stopped.get()) listener.onStatus("Đã dừng theo dõi usbmux.")
@@ -94,6 +92,8 @@ internal class UsbMuxDeviceMonitor(
     override fun close() {
         if (!stopped.compareAndSet(false, true)) return
         // Closing the session releases the claimed interface and unblocks I/O.
-        try { session?.close() } catch (_: Exception) { }
+        synchronized(sessionLock) {
+            try { session?.close() } catch (_: Exception) { }
+        }
     }
 }
