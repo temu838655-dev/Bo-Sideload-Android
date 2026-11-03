@@ -127,7 +127,7 @@ internal class ZsignEngine(private val context: Context) {
                 lines.forEach { line ->
                     synchronized(output) {
                         if (output.length < MAX_CERT_CHECK_LOG_CHARS) {
-                            output.append(line).append('\\n')
+                            output.append(line).append('\n')
                         }
                     }
                 }
@@ -154,7 +154,7 @@ internal class ZsignEngine(private val context: Context) {
             .containsMatchIn(text)
         if (process.exitValue() != 0 || !signed || revoked || invalid) {
             return CertificateCheck(false,
-                "zsign -C không xác nhận certificate hợp lệ (exit ${process.exitValue()}).\\n" +
+                "zsign -C không xác nhận certificate hợp lệ (exit ${process.exitValue()}).\n" +
                     text.takeLast(2500))
         }
         val ocspValid = Regex("OCSP\\s*:\\s*Valid", RegexOption.IGNORE_CASE).containsMatchIn(text)
@@ -165,7 +165,7 @@ internal class ZsignEngine(private val context: Context) {
             ocspUnknown -> "Certificate được zsign nhận diện; OCSP chưa xác minh được."
             else -> "Certificate được zsign nhận diện; không có kết quả OCSP rõ ràng."
         }
-        return CertificateCheck(true, note + "\\n" + text.takeLast(1800))
+        return CertificateCheck(true, note + "\n" + text.takeLast(1800))
     }
 
     fun engineVersion(): String {
