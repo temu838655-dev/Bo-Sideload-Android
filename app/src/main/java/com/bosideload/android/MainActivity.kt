@@ -117,7 +117,7 @@ class MainActivity : Activity() {
             setPadding(0, dp(24), 0, dp(10))
         }, fullWidth())
         page.addView(label(
-            "Chọn IPA, chứng chỉ .p12 và tất cả provisioning profile cần thiết cho ứng dụng chính cùng extension. Bo Sideload dùng bộ máy zsign chạy cục bộ trên thiết bị ARM.",
+            "Chọn IPA, chứng chỉ .p12 và tất cả provisioning profile cần thiết cho ứng dụng chính cùng extension (tối đa 10 file, có thể chọn nhiều file cùng lúc). Bo Sideload dùng bộ máy zsign chạy cục bộ trên thiết bị ARM.",
             13f, secondaryText, false
         ).apply { setPadding(0, 0, 0, dp(8)) }, fullWidth())
         p12Button = Button(this).apply {
