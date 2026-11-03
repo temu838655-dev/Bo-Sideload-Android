@@ -164,7 +164,7 @@ class MainActivity : Activity() {
             setPadding(0, dp(28), 0, dp(12))
         }, fullWidth())
         page.addView(label(
-            "Bộ ký: zsign Android 1.1.3 (MIT), chạy cục bộ. Có thể ký IPA bằng P12 và provisioning profile; hồ sơ Lockdown được lưu mã hóa và luồng cài qua USB đã được nối vào giao diện. Kết quả cài còn phụ thuộc iOS, chứng chỉ, provisioning profile và cần kiểm tra trên iPhone thật. Chưa hỗ trợ cài qua Wi-Fi.",
+            "Bộ ký: zsign Android 1.1.3 (MIT), chạy cục bộ. Có thể ký IPA bằng P12 và provisioning profile; hồ sơ Lockdown được lưu mã hóa. Cài IPA hỗ trợ USB và Wi-Fi Sync đời cũ trên thiết bị đã ghép đôi trước đó; Wi-Fi cần xác thực TLS và hiện vẫn thử nghiệm, chưa xác nhận trên iPhone thật. Remote Pairing/RSD đời mới chưa được hỗ trợ. Kết quả cài còn phụ thuộc iOS, chứng chỉ, provisioning profile và quyền của thiết bị.",
             12f, secondaryText, false
         ).apply { setPadding(dp(4), dp(8), dp(4), 0) }, fullWidth())
         setContentView(scroll)
