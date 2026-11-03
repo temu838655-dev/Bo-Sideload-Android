@@ -14,17 +14,18 @@ internal object NestedCodeBundleVerifier {
     fun verify(ipa: File): Result {
         return try {
             ZipFile(ipa).use { zip ->
-                val nestedInfoPaths = zip.entries().asSequence()
-                    .filter { !it.isDirectory && it.name.endsWith("/Info.plist") }
-                    .map { it.name }
-                    .filter { path ->
-                        path.matches(Regex("^Payload/[^/]+\\.app/.+\\.(?:appex|app)/Info\\.plist$"))
+                val nestedBundlePrefixes = zip.entries().asSequence()
+                    .filter { !it.isDirectory }
+                    .mapNotNull { entry ->
+                        Regex("^(Payload/[^/]+\\.app/.+?\\.(?:appex|app))/.*$")
+                            .find(entry.name)?.groupValues?.get(1)
                     }
                     .distinct()
                     .toList()
 
-                for (infoPath in nestedInfoPaths) {
-                    val prefix = infoPath.removeSuffix("Info.plist")
+                for (bundlePrefix in nestedBundlePrefixes) {
+                    val infoPath = "$bundlePrefix/Info.plist"
+                    val prefix = "$bundlePrefix/"
                     val info = readEntry(zip, infoPath, MAX_INFO_BYTES)
                         ?: return Result(false, "Không đọc được Info.plist của bundle lồng: $infoPath")
                     val metadata = IpaPlistReader.read(info)
@@ -57,7 +58,7 @@ internal object NestedCodeBundleVerifier {
                         )
                     }
                 }
-                Result(true, "Đã kiểm tra cấu trúc chữ ký của ${nestedInfoPaths.size} bundle lồng.", nestedInfoPaths.size)
+                Result(true, "Đã kiểm tra cấu trúc chữ ký của ${nestedBundlePrefixes.size} bundle lồng.", nestedBundlePrefixes.size)
             }
         } catch (error: Exception) {
             Result(false, "Không thể kiểm tra bundle lồng: ${error.message ?: error.javaClass.simpleName}")
