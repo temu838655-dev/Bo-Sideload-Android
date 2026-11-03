@@ -23,6 +23,14 @@ internal class ZsignEngine(private val context: Context) {
         provisioningProfile: File,
         password: String,
         outputIpa: File
+    ): SignResult = sign(inputIpa, p12File, listOf(provisioningProfile), password, outputIpa)
+
+    fun sign(
+        inputIpa: File,
+        p12File: File,
+        provisioningProfiles: List<File>,
+        password: String,
+        outputIpa: File
     ): SignResult {
         if (!inputIpa.isFile || inputIpa.length() == 0L) {
             return SignResult(false, null, "Không tìm thấy IPA đầu vào hoặc tệp rỗng.")
@@ -30,23 +38,15 @@ internal class ZsignEngine(private val context: Context) {
         if (!p12File.isFile || p12File.length() == 0L) {
             return SignResult(false, null, "Tệp chứng chỉ P12 không hợp lệ.")
         }
-        if (!provisioningProfile.isFile || provisioningProfile.length() == 0L) {
-            return SignResult(false, null, "Tệp provisioning profile không hợp lệ.")
+        if (provisioningProfiles.isEmpty() || provisioningProfiles.any { !it.isFile || it.length() == 0L }) {
+            return SignResult(false, null, "Danh sách provisioning profile rỗng hoặc có tệp không hợp lệ.")
         }
 
         return try {
             val binary = installEngine()
             outputIpa.parentFile?.mkdirs()
             outputIpa.delete()
-            val command = mutableListOf(
-                binary.absolutePath,
-                "-f",
-                "-k", p12File.absolutePath,
-                "-p", password,
-                "-m", provisioningProfile.absolutePath,
-                "-o", outputIpa.absolutePath,
-                inputIpa.absolutePath
-            )
+            val command = buildSigningCommand(binary, inputIpa, p12File, provisioningProfiles, password, outputIpa)
             val process = ProcessBuilder(command)
                 .directory(context.cacheDir)
                 .redirectErrorStream(true)
@@ -115,6 +115,28 @@ internal class ZsignEngine(private val context: Context) {
         }
     }
 
+    internal fun buildSigningCommand(
+        binary: File,
+        inputIpa: File,
+        p12File: File,
+        provisioningProfiles: List<File>,
+        password: String,
+        outputIpa: File
+    ): List<String> {
+        require(provisioningProfiles.isNotEmpty()) { "Cần ít nhất một provisioning profile." }
+        val command = mutableListOf(
+            binary.absolutePath,
+            "-f",
+            "-k", p12File.absolutePath,
+            "-p", password
+        )
+        provisioningProfiles.forEach { profile ->
+            command += "-m"
+            command += profile.absolutePath
+        }
+        command += listOf("-o", outputIpa.absolutePath, inputIpa.absolutePath)
+        return command
+    }
     private data class CertificateCheck(val valid: Boolean, val message: String)
 
     /**
