@@ -98,6 +98,45 @@ class AppleSigningCompatibilityTest {
     }
 
     @Test
+    fun rejectsExpiredProfileAndMismatchedCertificateFingerprint() {
+        val now = java.util.Date(10_000L)
+        val profile = AppleProvisioningProfileReader.ProfileInfo(
+            name = "Test",
+            uuid = "PROFILE-ID",
+            teamIdentifiers = listOf("ABCDE12345"),
+            applicationIdentifierPrefixes = listOf("ABCDE12345"),
+            bundleIdentifier = "com.example.app",
+            teamBundleIdentifier = "ABCDE12345.com.example.app",
+            platforms = listOf("iOS"),
+            provisionedDevices = listOf("DEVICE-1"),
+            provisionsAllDevices = false,
+            creationDate = java.util.Date(0L),
+            expirationDate = java.util.Date(9_000L),
+            developerCertificateCount = 1,
+            developerCertificateSha256 = listOf("AA:BB")
+        )
+        val certificate = AppleP12Reader.EntryInfo(
+            alias = "test",
+            hasPrivateKey = true,
+            subject = "CN=Test",
+            issuer = "CN=Apple",
+            notBefore = java.util.Date(0L),
+            notAfter = java.util.Date(20_000L),
+            sha256Fingerprint = "CC:DD"
+        )
+        val result = AppleSigningCompatibility.check(
+            ipa = IpaPlistReader.Metadata("Example", "com.example.app", "1.0", "1", "Example"),
+            profile = profile,
+            certificates = listOf(certificate),
+            now = now,
+            targetUdid = "DEVICE-1"
+        )
+        assertFalse(result.compatible)
+        assertTrue(result.errors.any { it.contains("hết hạn") })
+        assertTrue(result.errors.any { it.contains("fingerprint") })
+    }
+
+    @Test
     fun rejectsMalformedOrEmptyApplicationIdentifier() {
         assertFalse(AppleSigningCompatibility.matchesApplicationIdentifier("", "com.example.app"))
         assertFalse(AppleSigningCompatibility.matchesApplicationIdentifier("TEAM", "com.example.app"))
