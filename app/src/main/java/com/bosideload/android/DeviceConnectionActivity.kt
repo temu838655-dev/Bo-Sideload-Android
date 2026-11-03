@@ -22,11 +22,23 @@ class DeviceConnectionActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var devicesPanel: LinearLayout
     private var diagnosticReport: String = "Chưa có dữ liệu USB."
+    private var pendingPermissionDeviceId: Int? = null
     private val permissionAction = "com.bosideload.android.USB_PERMISSION"
 
     private val permissionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action == permissionAction) refreshDevices()
+            if (intent?.action == permissionAction) {
+                val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
+                val requestedId = pendingPermissionDeviceId
+                pendingPermissionDeviceId = null
+                refreshDevices()
+                if (!granted && requestedId != null) {
+                    status.text = "Bạn đã từ chối quyền USB cho thiết bị ID $requestedId. Hãy cấp quyền nếu muốn xem interface và endpoint."
+                    diagnosticReport += "\\n\\nKết quả xin quyền USB: bị từ chối (deviceId=$requestedId)."
+                } else if (granted) {
+                    status.text = "Đã được cấp quyền USB. Đang hiển thị thông tin interface và endpoint."
+                }
+            }
         }
     }
 
@@ -196,8 +208,13 @@ class DeviceConnectionActivity : Activity() {
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or
             if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0
         try {
+            pendingPermissionDeviceId = device.deviceId
+            status.text = "Đang chờ bạn xác nhận quyền truy cập USB..."
             usbManager.requestPermission(device, PendingIntent.getBroadcast(this, device.deviceId, intent, flags))
-        } catch (_: Exception) { }
+        } catch (error: Exception) {
+            pendingPermissionDeviceId = null
+            status.text = "Không thể yêu cầu quyền USB: ${error.message ?: "lỗi không xác định"}"
+        }
     }
 
     private fun hex(value: Int): String = "0x" + value.toString(16).uppercase().padStart(4, '0')
