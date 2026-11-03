@@ -25,6 +25,7 @@ class DeviceConnectionActivity : Activity() {
     private lateinit var wifiDevicesPanel: LinearLayout
     private lateinit var wifiScanButton: Button
     private var activeWifiDiscovery: WifiAppleDeviceDiscovery? = null
+    @Volatile private var activeWifiLockdownSession: LockdownTlsSession? = null
     private lateinit var pairButton: Button
     private lateinit var installButton: Button
     private var attachedAppleDevice: UsbDevice? = null
@@ -154,6 +155,45 @@ class DeviceConnectionActivity : Activity() {
                                     textSize = 13f
                                     setTextColor(-1)
                                 })
+                                if (match != null) {
+                                    val connectButton = Button(this@DeviceConnectionActivity).apply {
+                                        text = "Xác thực kết nối Wi-Fi"
+                                        isAllCaps = false
+                                        setOnClickListener {
+                                            isEnabled = false
+                                            status.text = "Đang mở Lockdown qua Wi-Fi và xác minh chứng chỉ TLS của iPhone…"
+                                            Thread({
+                                                var authenticated: LockdownTlsSession? = null
+                                                var failure: Exception? = null
+                                                try {
+                                                    val pairedRecord = pairRecordStore.load(match.deviceId)
+                                                        ?: throw IllegalStateException("Không còn pairing record đã lưu; hãy ghép đôi lại bằng USB.")
+                                                    authenticated = WifiLockdownConnector.connect(
+                                                        device.hostAddress,
+                                                        device.port,
+                                                        pairedRecord
+                                                    )
+                                                } catch (error: Exception) {
+                                                    failure = error
+                                                }
+                                                runOnUiThread {
+                                                    if (isFinishing || isDestroyed) {
+                                                        authenticated?.close()
+                                                    } else if (authenticated != null) {
+                                                        activeWifiLockdownSession?.close()
+                                                        activeWifiLockdownSession = authenticated
+                                                        text = "Đã xác thực TLS"
+                                                        status.text = "Đã xác thực Lockdown TLS với iPhone qua Wi-Fi. Phiên đang được giữ an toàn; truyền IPA/cài đặt qua Wi-Fi chưa được nối ở bước này."
+                                                    } else {
+                                                        isEnabled = true
+                                                        status.text = "Không xác thực được Lockdown TLS qua Wi-Fi: ${failure?.message ?: "lỗi không xác định"}"
+                                                    }
+                                                }
+                                            }, "BoSideload-wifi-lockdown").apply { isDaemon = true; start() }
+                                        }
+                                    }
+                                    card.addView(connectButton)
+                                }
                                 wifiDevicesPanel.addView(card, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
                                 status.text = if (match != null) {
                                     "Đã khớp authTag với pairing record. Đây mới là ứng viên; xác thực TLS chưa được thực hiện."
@@ -228,6 +268,8 @@ class DeviceConnectionActivity : Activity() {
         activeMonitorDeviceId = null
         activeWifiDiscovery?.close()
         activeWifiDiscovery = null
+        activeWifiLockdownSession?.close()
+        activeWifiLockdownSession = null
         attachedAppleDevice = null
         super.onDestroy()
     }
