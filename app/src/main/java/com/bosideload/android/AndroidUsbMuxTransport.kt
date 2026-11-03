@@ -9,6 +9,7 @@ import android.hardware.usb.UsbManager
 import java.io.Closeable
 import java.io.EOFException
 import java.io.IOException
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Low-level Android USB Host transport for Apple's usbmux interface.
@@ -24,8 +25,7 @@ internal class AndroidUsbMuxTransport private constructor(
     private val timeoutMs: Int
 ) : Closeable {
 
-    @Volatile
-    private var closed = false
+    private val closed = AtomicBoolean(false)
 
     @Synchronized
     @Throws(IOException::class)
@@ -43,7 +43,6 @@ internal class AndroidUsbMuxTransport private constructor(
         }
     }
 
-    @Synchronized
     @Throws(IOException::class)
     fun readPacket(maxPacketSize: Long = UsbMuxPacketHeader.DEFAULT_MAX_PACKET_SIZE): UsbMuxPacketCodec.Packet {
         checkOpen()
@@ -77,18 +76,13 @@ internal class AndroidUsbMuxTransport private constructor(
     }
 
     private fun checkOpen() {
-        check(!closed) { "USB mux transport is closed" }
+        check(!closed.get()) { "USB mux transport is closed" }
     }
 
-    @Synchronized
     override fun close() {
-        if (closed) return
-        closed = true
-        try {
-            connection.releaseInterface(usbInterface)
-        } finally {
-            connection.close()
-        }
+        if (!closed.compareAndSet(false, true)) return
+        // Close immediately so a blocking bulkTransfer on the worker can unwind.
+        connection.close()
     }
 
     companion object {
