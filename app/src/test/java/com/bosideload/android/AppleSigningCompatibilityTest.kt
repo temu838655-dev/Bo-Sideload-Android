@@ -64,6 +64,32 @@ class AppleSigningCompatibilityTest {
     }
 
     @Test
+    fun readsBundleIdentifiersFromNestedExtensionAndWatchPlists() {
+        val ipa = java.io.File.createTempFile("nested-bundles", ".ipa")
+        try {
+            java.util.zip.ZipOutputStream(ipa.outputStream()).use { zip ->
+                val plist = """<?xml version="1.0" encoding="UTF-8"?>
+                    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+                    <plist version="1.0"><dict>
+                    <key>CFBundleIdentifier</key><string>com.example.share</string>
+                    <key>CFBundleExecutable</key><string>ShareExtension</string>
+                    </dict></plist>""".trimIndent().toByteArray()
+                zip.putNextEntry(java.util.zip.ZipEntry(
+                    "Payload/Example.app/PlugIns/Share.appex/Info.plist"
+                ))
+                zip.write(plist)
+                zip.closeEntry()
+            }
+            val nested = AppleSigningCompatibility.inspectNestedCodeBundles(ipa)
+            assertTrue(nested.size == 1)
+            assertTrue(nested.single().bundleId == "com.example.share")
+            assertTrue(nested.single().executable == "ShareExtension")
+        } finally {
+            ipa.delete()
+        }
+    }
+
+    @Test
     fun profileApplicationIdentifierMustUseKnownTeamPrefix() {
         assertTrue(AppleSigningCompatibility.hasKnownProfilePrefix(
             "ABCDE12345.com.example.app",
