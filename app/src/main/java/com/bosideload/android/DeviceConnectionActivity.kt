@@ -26,6 +26,7 @@ class DeviceConnectionActivity : Activity() {
     private lateinit var wifiScanButton: Button
     private var activeWifiDiscovery: WifiAppleDeviceDiscovery? = null
     @Volatile private var activeWifiLockdownSession: LockdownTlsSession? = null
+    @Volatile private var activeWifiLockdownDeviceId: String? = null
     private lateinit var pairButton: Button
     private lateinit var installButton: Button
     private var attachedAppleDevice: UsbDevice? = null
@@ -183,6 +184,7 @@ class DeviceConnectionActivity : Activity() {
                                                     } else if (authenticated != null) {
                                                         activeWifiLockdownSession?.close()
                                                         activeWifiLockdownSession = authenticated
+                                                        activeWifiLockdownDeviceId = match.deviceId
                                                         text = "Đã xác thực TLS"
                                                         wifiInstallButton?.isEnabled = true
                                                         status.text = "Đã xác thực Lockdown TLS với iPhone qua Wi-Fi. Phiên đang được giữ an toàn; truyền IPA/cài đặt qua Wi-Fi chưa được nối ở bước này."
@@ -202,7 +204,7 @@ class DeviceConnectionActivity : Activity() {
                                         setOnClickListener {
                                             val session = activeWifiLockdownSession
                                             val ipa = signedIpaFile()
-                                            if (session == null || ipa == null || !ipa.isFile || !ipa.canRead() || ipa.length() <= 0) {
+                                            if (session == null || activeWifiLockdownDeviceId != match.deviceId || ipa == null || !ipa.isFile || !ipa.canRead() || ipa.length() <= 0) {
                                                 status.text = "Cần xác thực Wi-Fi và chọn IPA đã ký từ màn hình chính trước."
                                                 return@setOnClickListener
                                             }
@@ -329,6 +331,7 @@ class DeviceConnectionActivity : Activity() {
         activeWifiDiscovery = null
         activeWifiLockdownSession?.close()
         activeWifiLockdownSession = null
+        activeWifiLockdownDeviceId = null
         attachedAppleDevice = null
         super.onDestroy()
     }
