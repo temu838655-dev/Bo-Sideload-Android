@@ -96,7 +96,7 @@ class LockdownPlistCodecTest {
         val decoded = LockdownPlistCodec.decode(encoded)
         assertEquals("QueryType", decoded["Request"])
         assertEquals("com.apple.mobile.lockdown", decoded["Value"])
-        assertEquals(7L, decoded["Count"])
+        assertEquals(7L, (decoded["Count"] as Number).toLong())
         assertEquals(true, decoded["Enabled"])
         assertArrayEquals(byteArrayOf(1, 2), decoded["Payload"] as ByteArray)
     }
