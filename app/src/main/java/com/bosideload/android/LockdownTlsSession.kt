@@ -39,6 +39,27 @@ internal class LockdownTlsSession private constructor(
     }
 
     companion object {
+        /**
+         * Convenience entry point for the USBMux Connect stream. It sends
+         * StartSession on the plaintext Lockdown stream, then layers TLS over
+         * the same raw USB service stream.
+         */
+        @Throws(IOException::class)
+        fun start(
+            connectSession: UsbMuxConnectSession,
+            record: PairRecord
+        ): LockdownTlsSession {
+            val rawSocket = StreamBackedSocket(
+                connectSession.inputStream,
+                connectSession.outputStream
+            ) { connectSession.close() }
+            val plainChannel = LockdownSessionChannel(
+                connectSession.inputStream,
+                connectSession.outputStream
+            )
+            return start(plainChannel, rawSocket, record)
+        }
+
         @Throws(IOException::class)
         fun start(
             plainChannel: LockdownSessionChannel,
