@@ -11,10 +11,11 @@ import java.util.Base64
 import javax.xml.parsers.DocumentBuilderFactory
 
 /**
- * Small, bounded XML property-list codec for Lockdown request/response payloads.
+ * Bounded XML and binary property-list decoder plus XML encoder for Lockdown messages.
  *
- * Supported values: dictionary, array, string, integer, real, boolean and data.
- * Dates and binary-plist payloads are intentionally not accepted yet.
+ * Supported values: dictionary, array, string, integer, real, boolean, data and date.
+ * Binary input is decoded with dd-plist after the same byte-size cap, then normalized
+ * with depth and node limits before it is exposed to the protocol layer.
  */
 internal object LockdownPlistCodec {
     const val DEFAULT_MAX_BYTES = 4 * 1024 * 1024
