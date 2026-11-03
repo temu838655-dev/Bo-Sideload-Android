@@ -7,7 +7,7 @@ class PairRecordCodecTest {
     private fun sample() = PairRecord(
         "device-123", "host-123", "buid-123",
         byteArrayOf(1, 2), byteArrayOf(3, 4),
-        byteArrayOf(5, 6), byteArrayOf(7, 8), byteArrayOf(9)
+        byteArrayOf(5, 6), byteArrayOf(7, 8), byteArrayOf(8, 9), byteArrayOf(9)
     )
 
     @Test
@@ -21,6 +21,7 @@ class PairRecordCodecTest {
         assertArrayEquals(a.hostKeyMaterial, b.hostKeyMaterial)
         assertArrayEquals(a.deviceCertificate, b.deviceCertificate)
         assertArrayEquals(a.rootCertificate, b.rootCertificate)
+        assertArrayEquals(a.rootKeyMaterial, b.rootKeyMaterial)
         assertArrayEquals(a.escrowBag, b.escrowBag)
     }
 
