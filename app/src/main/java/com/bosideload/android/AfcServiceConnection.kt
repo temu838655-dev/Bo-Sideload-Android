@@ -64,15 +64,7 @@ internal class PairedServiceTlsSocket private constructor(
             val deviceCertificate = parseCertificate(record.deviceCertificate)
             // Present the paired host identity to the Apple service. The root
             // certificate is the issuer, not the client identity.
-            try {
-                hostCertificate.verify(rootCertificate.publicKey)
-                deviceCertificate.verify(rootCertificate.publicKey)
-                hostCertificate.checkValidity()
-                deviceCertificate.checkValidity()
-                rootCertificate.checkValidity()
-            } catch (error: Exception) {
-                throw IOException("Pair record certificates are not valid under the saved root certificate", error)
-            }
+            validatePairedServiceCertificates(rootCertificate, hostCertificate, deviceCertificate)
             val hostPrivateKey = parsePrivateKey(record.hostKeyMaterial)
             verifyPairedHostPrivateKeyMatchesCertificate(hostPrivateKey, hostCertificate)
             val identity = KeyStore.getInstance(KeyStore.getDefaultType()).apply {
@@ -218,5 +210,26 @@ internal fun verifyPairedHostPrivateKeyMatchesCertificate(
         throw error
     } catch (error: Exception) {
         throw IOException("Could not validate the paired host key and certificate", error)
+    }
+}
+
+/**
+ * Validates the saved Apple pairing certificate chain before TLS is started.
+ */
+@Throws(IOException::class)
+internal fun validatePairedServiceCertificates(
+    rootCertificate: X509Certificate,
+    hostCertificate: X509Certificate,
+    deviceCertificate: X509Certificate
+) {
+    try {
+        rootCertificate.verify(rootCertificate.publicKey)
+        hostCertificate.verify(rootCertificate.publicKey)
+        deviceCertificate.verify(rootCertificate.publicKey)
+        rootCertificate.checkValidity()
+        hostCertificate.checkValidity()
+        deviceCertificate.checkValidity()
+    } catch (error: Exception) {
+        throw IOException("Pair record certificates are not valid under the saved root certificate", error)
     }
 }
