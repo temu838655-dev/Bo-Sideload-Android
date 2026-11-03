@@ -241,7 +241,7 @@ class DeviceConnectionActivity : Activity() {
                                                         } else {
                                                             "✓ iPhone báo cài đặt hoàn tất qua Wi-Fi; không xóa được IPA tạm."
                                                         }
-                                                        wifiInstallButton.isEnabled = activeWifiLockdownSession != null
+                                                        wifiInstallButton?.isEnabled = activeWifiLockdownSession != null
                                                     }
                                                 } catch (error: Exception) {
                                                     runOnUiThread {
