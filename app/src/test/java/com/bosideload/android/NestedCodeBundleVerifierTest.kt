@@ -41,6 +41,19 @@ class NestedCodeBundleVerifierTest {
     }
 
     @Test
+    fun rejectsNestedBundleWhenItsInfoPlistIsMissing() {
+        val prefix = "Payload/Demo.app/PlugIns/Share.appex/"
+        val ipa = createIpa(mapOf(prefix + "Share" to byteArrayOf(0, 0, 0, 0)))
+        try {
+            val result = NestedCodeBundleVerifier.verify(ipa)
+            assertFalse(result.valid)
+            assertTrue(result.message.contains("Info.plist"))
+        } finally {
+            ipa.delete()
+        }
+    }
+
+    @Test
     fun inspectsWatchAppBundleExecutableInsteadOfIgnoringIt() {
         val prefix = "Payload/Demo.app/Watch/DemoWatch.app/"
         val entries = mapOf(
