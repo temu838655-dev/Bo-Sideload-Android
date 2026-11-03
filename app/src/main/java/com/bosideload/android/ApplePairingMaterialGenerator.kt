@@ -42,7 +42,34 @@ internal object ApplePairingMaterialGenerator {
         val hostCertificatePem: ByteArray,
         val hostPrivateKeyPem: ByteArray,
         val deviceCertificatePem: ByteArray
-    )
+    ) {
+        /**
+         * Creates the persistable record only after the Lockdown Pair response
+         * has been parsed as a successful Pair reply. The caller must then save
+         * it immediately through EncryptedPairRecordStore.
+         */
+        fun toPairRecordAfterSuccessfulPair(
+            deviceId: String,
+            hostId: String,
+            systemBuid: String,
+            response: LockdownResponseParser.Response
+        ): PairRecord {
+            val success = response as? LockdownResponseParser.Response.Success
+                ?: throw IllegalArgumentException("cannot create a pairing record from a failed Pair response")
+            require(success.request == "Pair") { "a successful Pair response is required" }
+            return PairRecord(
+                deviceId = deviceId,
+                hostId = hostId,
+                systemBuid = systemBuid,
+                hostCertificate = hostCertificatePem,
+                hostKeyMaterial = hostPrivateKeyPem,
+                deviceCertificate = deviceCertificatePem,
+                rootCertificate = rootCertificatePem,
+                rootKeyMaterial = rootPrivateKeyPem,
+                escrowBag = success.escrowBag
+            ).also { it.validate() }
+        }
+    }
 
     fun generate(devicePublicKeyPem: ByteArray, now: Date = Date()): Material {
         require(devicePublicKeyPem.isNotEmpty()) { "DevicePublicKey must not be empty" }

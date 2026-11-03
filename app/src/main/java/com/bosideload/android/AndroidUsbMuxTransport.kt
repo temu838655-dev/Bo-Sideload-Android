@@ -89,7 +89,7 @@ internal class AndroidUsbMuxTransport private constructor(
         const val DEFAULT_TIMEOUT_MS = 5000
 
         /**
-         * Finds the standard Apple USBMux interface (class FE, subclass 01,
+         * Finds the Apple USBMux vendor-specific interface (class FF, subclass FE,
          * protocol 02) and its bulk IN/OUT endpoints.
          */
         fun open(

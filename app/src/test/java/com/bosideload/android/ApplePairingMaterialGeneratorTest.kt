@@ -42,6 +42,36 @@ class ApplePairingMaterialGeneratorTest {
     }
 
     @Test
+    fun createsPairRecordOnlyFromSuccessfulPairReplyAndPreservesEscrowBag() {
+        val deviceGenerator = KeyPairGenerator.getInstance("RSA")
+        deviceGenerator.initialize(2048)
+        val devicePair = deviceGenerator.generateKeyPair()
+        val publicKeyPem = StringWriter().also { writer ->
+            org.bouncycastle.openssl.jcajce.JcaPEMWriter(writer).use { it.writeObject(devicePair.public) }
+        }.toString().toByteArray(StandardCharsets.US_ASCII)
+        val material = ApplePairingMaterialGenerator.generate(publicKeyPem)
+        val escrow = byteArrayOf(8, 6, 7, 5, 3, 0, 9)
+        val response = LockdownResponseParser.parse(
+            LockdownPlistCodec.encode(mapOf("Request" to "Pair", "EscrowBag" to escrow))
+        )
+
+        val record = material.toPairRecordAfterSuccessfulPair(
+            "DEVICE-UDID", "HOST-ID", "SYSTEM-BUID", response
+        )
+        assertEquals("DEVICE-UDID", record.deviceId)
+        assertArrayEquals(escrow, record.escrowBag)
+        assertArrayEquals(material.hostPrivateKeyPem, record.hostKeyMaterial)
+        assertArrayEquals(material.rootPrivateKeyPem, record.rootKeyMaterial)
+
+        val failed = LockdownResponseParser.parse(
+            LockdownPlistCodec.encode(mapOf("Request" to "Pair", "Error" to "PairingProhibited"))
+        )
+        assertThrows(IllegalArgumentException::class.java) {
+            material.toPairRecordAfterSuccessfulPair("D", "H", "B", failed)
+        }
+    }
+
+    @Test
     fun rejectsEmptyAndNonPemDevicePublicKeys() {
         assertThrows(IllegalArgumentException::class.java) {
             ApplePairingMaterialGenerator.generate(byteArrayOf())

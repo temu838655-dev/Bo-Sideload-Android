@@ -36,7 +36,7 @@ The Android app now contains small, bounded framing helpers with unit tests:
 - `UsbMuxPacketCodec`: reads/writes complete usbmux packets and rejects oversized or truncated packets.
 - `LockdownPacketCodec`: reads/writes the 4-byte big-endian length-prefixed Lockdown payload framing and rejects negative, oversized, or truncated payloads.
 
-These are protocol building blocks only. They do not yet serialize/parse Apple plist messages, open an Android USB bulk transport, complete the Lockdown StartSession/Pair flow, create or store a pairing record, start the Installation Proxy service, or install an application. No UI should describe USB detection as a trusted iPhone connection.
+These are protocol building blocks, not proof of a trusted connection. The app now also has bounded plist handling, an Android USB bulk transport and Listen monitor, Lockdown request/response framing, certificate-generation and Pair-request builders, and encrypted pairing-record storage. The Connect-to-Lockdown socket path and an end-to-end physical-device Pair exchange are still not complete. No UI should describe USB detection or a Listen acknowledgement as a trusted iPhone connection.
 
 The next implementation gate is a real transport adapter plus plist request/response handling, followed by a pairing flow tested with a physical iPhone and explicit user approval. Keep pairing records protected by Android Keystore-backed encryption and never log pairing secrets.
 
@@ -44,7 +44,7 @@ The next implementation gate is a real transport adapter plus plist request/resp
 
 A bounded XML plist codec has now been added for the Lockdown message layer. It supports dictionaries, arrays, strings, integers, real numbers, booleans, and base64 data. Parsing accepts Apple's standard plist DOCTYPE while disabling external entity and external DTD access; payload size, nesting depth, and parsed value count are limited. Unit tests cover round trips, standard Apple XML, XML escaping, malformed dictionaries, duplicate keys, unsupported values, size limits, and external-entity isolation.
 
-This remains a serialization layer only. It does not send a Lockdown request, authenticate the host, or establish a trusted session. Binary plist and date values are not supported by this codec yet; responses using those values must be handled before claiming general Lockdown compatibility.
+This remains a serialization layer only. It does not authenticate the host or establish a trusted session. The decoder also accepts binary plist and date values as described in the later Binary plist and date support section.
 
 
 ### usbmux plist request groundwork
@@ -75,7 +75,7 @@ Descriptor matching was checked against the upstream usbmuxd interface definitio
 
 `LockdownRequests` now builds XML-plist envelopes for the non-mutating `QueryType` and `GetValue` requests, plus a `StartSession` request when the caller supplies HostID and SystemBUID. `LockdownResponseParser` distinguishes successful replies from explicit Lockdown errors and preserves Value, SessionID, and EnableSessionSSL fields. Unit tests cover request fields, selector validation, session identifiers, and error replies.
 
-This is protocol serialization only. It does not generate host certificates/private keys, send a Pair request, store a pairing record, perform TLS session negotiation, or establish a trusted Lockdown connection. Do not send StartSession until a valid pairing record and correct host identifiers have been obtained through Apple's normal trust workflow. Binary plist and date support remain outstanding.
+This is protocol serialization only. The app now generates Root/Host/Device certificate material from the device's Lockdown DevicePublicKey, builds the public-certificate-only Pair request, and preserves an EscrowBag from a successful Pair response. It still does not open a Lockdown service socket, send the Pair request to a real device, receive a real PairRecord, perform TLS session negotiation, or establish a trusted connection. Do not send StartSession until a real user-approved Pair exchange has succeeded and the resulting record has been encrypted in Android Keystore-backed storage.
 
 
 ### Lockdown framed session channel
@@ -94,7 +94,16 @@ The Lockdown plist decoder now detects Apple's `bplist00` signature and uses the
 
 A versioned pairing-record model and bounded serializer have been added for the device/host identifiers, host and root certificates, corresponding host/root key material, device certificate, and optional escrow bag. The Android storage layer encrypts the serialized record with a per-device AES-256-GCM key held by Android Keystore; the key is non-exportable, the device identifier is authenticated as GCM additional data, and only the IV plus ciphertext is stored in private app preferences. Removing a record also removes its Keystore alias. If the Keystore key is missing or authentication fails, the store reports an error rather than silently accepting or replacing the record.
 
-This is storage infrastructure only. The application does not yet generate Apple's required certificates, send a Pair request, receive a real PairRecord, or use this store in a completed pairing flow. The record model must be populated only from a successful, user-approved Apple pairing exchange. No pairing bypass is implemented.
+The certificate generator and Pair request builder are now present, and a helper refuses to assemble a persistable PairRecord unless the parsed response is a successful Pair reply. However, the application still does not send Pair over a live Lockdown socket or receive a real PairRecord, and the store is not yet wired into a completed pairing workflow. The record must be populated only from a successful, user-approved Apple pairing exchange. No pairing bypass is implemented.
 
 
 The record serializer has round-trip and malformed-input unit tests. Android Keystore encryption itself still needs instrumentation testing on supported Android devices; JVM unit tests cannot prove hardware-backed key behavior or recovery after device backup/restore.
+
+
+### Apple Lockdown pairing material and Pair request groundwork
+
+`ApplePairingMaterialGenerator` now parses the device's PEM-encoded `DevicePublicKey` (including SubjectPublicKeyInfo and PKCS#1 RSA public-key encodings), generates separate 2048-bit RSA Root and Host key pairs, and creates a self-signed Root certificate plus Host and Device certificates signed by that Root. Certificate signatures and public/private key matching are covered by JVM tests. The generator does not contact a device and does not bypass the iOS trust prompt.
+
+`LockdownRequests.pair` builds the Pair plist with DeviceCertificate, HostCertificate, RootCertificate, HostID, SystemBUID and protocol version 2; private keys are deliberately omitted from the request. `LockdownResponseParser` preserves an optional EscrowBag. The material-to-record helper rejects failure replies and only assembles a PairRecord after a successful parsed Pair response. The caller must then persist it with `EncryptedPairRecordStore`.
+
+This remains unconnected protocol groundwork: there is no working usbmux Connect-to-port-62078 stream, no live GetValue(DevicePublicKey) exchange, no physical iPhone trust prompt test, and no verified TLS StartSession. These are explicit remaining gates before any trusted-connection or IPA-install feature can be enabled.
