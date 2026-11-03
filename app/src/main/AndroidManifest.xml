@@ -3,6 +3,8 @@
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
     <application
         android:allowBackup="true"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:label="Bo Sideload"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity
