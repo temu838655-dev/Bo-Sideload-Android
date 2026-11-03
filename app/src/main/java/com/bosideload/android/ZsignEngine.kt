@@ -115,28 +115,6 @@ internal class ZsignEngine(private val context: Context) {
         }
     }
 
-    internal fun buildSigningCommand(
-        binary: File,
-        inputIpa: File,
-        p12File: File,
-        provisioningProfiles: List<File>,
-        password: String,
-        outputIpa: File
-    ): List<String> {
-        require(provisioningProfiles.isNotEmpty()) { "Cần ít nhất một provisioning profile." }
-        val command = mutableListOf(
-            binary.absolutePath,
-            "-f",
-            "-k", p12File.absolutePath,
-            "-p", password
-        )
-        provisioningProfiles.forEach { profile ->
-            command += "-m"
-            command += profile.absolutePath
-        }
-        command += listOf("-o", outputIpa.absolutePath, inputIpa.absolutePath)
-        return command
-    }
     private data class CertificateCheck(val valid: Boolean, val message: String)
 
     /**
@@ -258,12 +236,34 @@ internal class ZsignEngine(private val context: Context) {
         return destination
     }
 
-    private companion object {
+    companion object {
         const val PROCESS_TIMEOUT_MINUTES = 10L
         const val MAX_LOG_CHARS = 32_000
         const val VERSION_TIMEOUT_SECONDS = 15L
         const val MAX_VERSION_OUTPUT_CHARS = 4_000
         const val CERT_CHECK_TIMEOUT_SECONDS = 90L
         const val MAX_CERT_CHECK_LOG_CHARS = 12_000
+        internal fun buildSigningCommand(
+                binary: File,
+                inputIpa: File,
+                p12File: File,
+                provisioningProfiles: List<File>,
+                password: String,
+                outputIpa: File
+            ): List<String> {
+                require(provisioningProfiles.isNotEmpty()) { "Cần ít nhất một provisioning profile." }
+                val command = mutableListOf(
+                    binary.absolutePath,
+                    "-f",
+                    "-k", p12File.absolutePath,
+                    "-p", password
+                )
+                provisioningProfiles.forEach { profile ->
+                    command += "-m"
+                    command += profile.absolutePath
+                }
+                command += listOf("-o", outputIpa.absolutePath, inputIpa.absolutePath)
+                return command
+            }
     }
 }
