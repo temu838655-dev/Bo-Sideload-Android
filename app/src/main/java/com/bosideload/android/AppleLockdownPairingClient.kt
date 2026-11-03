@@ -25,6 +25,17 @@ internal class AppleLockdownPairingClient(
         require(systemBuid.isNotBlank()) { "SystemBUID must not be blank" }
         require(hostId.isNotBlank()) { "HostID must not be blank" }
 
+        // Identify the service before issuing any pairing requests. A Lockdown
+        // socket must answer the standard QueryType handshake.
+        val typeResponse = channel.exchange(LockdownRequests.queryType())
+        val typeSuccess = typeResponse as? LockdownResponseParser.Response.Success
+            ?: throw IOException("iPhone refused the Lockdown QueryType request")
+        if (typeSuccess.request != "QueryType" ||
+            typeSuccess.value != LOCKDOWN_SERVICE_TYPE
+        ) {
+            throw IOException("connected USB service is not Apple Lockdown")
+        }
+
         // Read the UDID from Lockdown itself and ensure the usbmux serial used
         // as the device key refers to this same physical device.
         val udidResponse = channel.exchange(LockdownRequests.getValue(key = DEVICE_UDID_KEY))
@@ -80,6 +91,7 @@ internal class AppleLockdownPairingClient(
         fun isPlausibleUdid(value: String): Boolean =
             value.length in 16..64 && value.all { it.isLetterOrDigit() || it == '-' }
 
+        const val LOCKDOWN_SERVICE_TYPE = "com.apple.mobile.lockdown"
         const val DEVICE_UDID_KEY = "UniqueDeviceID"
         const val DEVICE_PUBLIC_KEY_KEY = "DevicePublicKey"
         const val MAX_DEVICE_PUBLIC_KEY_BYTES = 64 * 1024
