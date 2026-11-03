@@ -65,8 +65,12 @@ class ApplePairingMaterialGeneratorTest {
         val parsed = PEMParser(StringReader(String(privateKeyPem, StandardCharsets.US_ASCII))).use {
             it.readObject()
         }
-        val privateKey = JcaPEMKeyConverter().setProvider("BC")
-            .getPrivateKey(parsed as PrivateKeyInfo)
+        val converter = JcaPEMKeyConverter().setProvider("BC")
+        val privateKey = when (parsed) {
+            is PrivateKeyInfo -> converter.getPrivateKey(parsed)
+            is org.bouncycastle.openssl.PEMKeyPair -> converter.getKeyPair(parsed).private
+            else -> throw AssertionError("unexpected private key PEM object: ${parsed?.javaClass?.name}")
+        }
         val challenge = "Bo Sideload pairing key check".toByteArray(StandardCharsets.UTF_8)
         val signer = Signature.getInstance("SHA256withRSA")
         signer.initSign(privateKey)
