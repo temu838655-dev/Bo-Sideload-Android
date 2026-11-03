@@ -28,10 +28,11 @@ The current USB path is implemented in Kotlin rather than delegated to a desktop
 
 ## IPA signing scope
 
-- The signing UI currently accepts one P12 identity and one provisioning profile for the IPA operation.
-- Preflight detects nested `.appex` and Watch app `Info.plist` entries and warns that those bundles may need their own App IDs and provisioning profiles.
-- Upstream zsign supports multiple `-m` profile arguments, but Bo Sideload does not yet expose per-extension profile selection, compatibility checks, or post-sign verification for every nested bundle.
-- Do not interpret a successful main-app check as proof that all extensions or Watch bundles are correctly signed or installable.
+- The signing UI accepts one P12 identity and multiple provisioning profiles for a single IPA.
+- Preflight reads the main app and nested `.appex` / Watch bundle `Info.plist` files, then maps the selected profiles to bundle identifiers through each profile's `Entitlements.application-identifier`.
+- Each resolved assignment is checked for application-identifier/prefix compatibility, iOS platform, expiration, P12 certificate fingerprint/private-key availability, and target-device authorization when a verified UDID is available.
+- Missing, ambiguous, and unused profile selections are rejected. The resolved profile order is passed to zsign using repeated `-m` arguments.
+- This is a compatibility preflight, not full Apple CMS trust-chain verification or complete post-sign validation of every nested code signature. A successful zsign run does not guarantee that iOS will install or launch the IPA; validate on a real iPhone.
 
 ## Wi-Fi implementation sequence
 
