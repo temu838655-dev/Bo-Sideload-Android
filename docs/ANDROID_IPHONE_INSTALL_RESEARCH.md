@@ -39,3 +39,9 @@ The Android app now contains small, bounded framing helpers with unit tests:
 These are protocol building blocks only. They do not yet serialize/parse Apple plist messages, open an Android USB bulk transport, issue usbmux Listen/Connect requests, complete the Lockdown StartSession/Pair flow, create or store a pairing record, start the Installation Proxy service, or install an application. No UI should describe USB detection as a trusted iPhone connection.
 
 The next implementation gate is a real transport adapter plus plist request/response handling, followed by a pairing flow tested with a physical iPhone and explicit user approval. Keep pairing records protected by Android Keystore-backed encryption and never log pairing secrets.
+
+### XML Lockdown plist groundwork
+
+A bounded XML plist codec has now been added for the Lockdown message layer. It supports dictionaries, arrays, strings, integers, real numbers, booleans, and base64 data. Parsing accepts Apple's standard plist DOCTYPE while disabling external entity and external DTD access; payload size, nesting depth, and parsed value count are limited. Unit tests cover round trips, standard Apple XML, XML escaping, malformed dictionaries, duplicate keys, unsupported values, size limits, and external-entity isolation.
+
+This remains a serialization layer only. It does not send a Lockdown request, authenticate the host, or establish a trusted session. Binary plist and date values are not supported by this codec yet; responses using those values must be handled before claiming general Lockdown compatibility.
