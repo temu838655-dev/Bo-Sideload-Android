@@ -55,6 +55,14 @@ class AppleConnectActivity : Activity() {
             setOnClickListener { exportCsr() }
         }, full())
         page.addView(Button(this).apply {
+            text = "⑤ Tạo chứng chỉ Apple Development"; isAllCaps = false
+            setOnClickListener { confirmCertificateCreation("DEVELOPMENT") }
+        }, full())
+        page.addView(Button(this).apply {
+            text = "⑥ Tạo chứng chỉ Apple Distribution"; isAllCaps = false
+            setOnClickListener { confirmCertificateCreation("DISTRIBUTION") }
+        }, full())
+        page.addView(Button(this).apply {
             text = "Xóa toàn bộ khóa API và khóa ký đã lưu"; isAllCaps = false
             setOnClickListener {
                 vault.clear(); p8 = null; keyId.text.clear(); issuerId.text.clear()
@@ -161,6 +169,42 @@ class AppleConnectActivity : Activity() {
             putExtra(Intent.EXTRA_TITLE, "Bo-Sideload-iOS.csr")
         }
         startActivityForResult(intent, 811)
+    }
+
+    private fun confirmCertificateCreation(type: String) {
+        val displayName = if (type == "DEVELOPMENT") "Apple Development" else "Apple Distribution"
+        val material = runCatching { vault.loadSigningMaterial() }.getOrNull()
+        if (material == null) {
+            status.text = "Chưa có khóa ký và CSR. Hãy tạo CSR trước."
+            return
+        }
+        val credentials = runCatching { vault.load() }.getOrNull()
+        if (credentials == null) {
+            status.text = "Chưa lưu Team API Key. Hãy kết nối và kiểm tra Apple API trước."
+            return
+        }
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Xác nhận tạo $displayName")
+            .setMessage(
+                "Thao tác này sẽ gửi CSR lên Apple và tạo chứng chỉ thật trong tài khoản Developer của bạn. " +
+                "Có thể tiêu tốn hạn mức chứng chỉ của Team. Ứng dụng sẽ không tự thu hồi chứng chỉ cũ. " +
+                "Chỉ tiếp tục nếu bạn chắc chắn muốn tạo $displayName."
+            )
+            .setNegativeButton("Hủy", null)
+            .setPositiveButton("Tạo chứng chỉ") { _, _ -> createCertificate(type, credentials, material) }
+            .show()
+    }
+
+    private fun createCertificate(
+        type: String,
+        credentials: AppleConnectCredentialVault.Credentials,
+        material: AppleConnectCredentialVault.SigningMaterial
+    ) {
+        status.text = "Đang gửi yêu cầu tạo chứng chỉ $type lên Apple…"
+        Thread {
+            val result = AppleCertificateProvisioner.create(credentials, material, type, vault)
+            runOnUiThread { status.text = result.message }
+        }.start()
     }
 
     private fun saveAndValidate() {
