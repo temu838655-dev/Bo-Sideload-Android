@@ -179,7 +179,7 @@ internal object MachOInspector {
                 val hashType = bytes[cd + 37].toInt() and 0xff
                 val pageSize = bytes[cd + 39].toInt() and 0xff
                 if (magic != CSMAGIC_CODEDIRECTORY || cdLength < 44 || relative + cdLength > blobLength) return false
-                if (hashSize == 0 || hashType !in 1..4 || pageSize > 30 || identOffset >= cdLength) return false
+                if (hashSize == 0 || hashType !in 1..4 || pageSize > 30) return false
                 if (specialSlots > 10_000 || codeSlots > 10_000_000) return false
 
                 // CodeDirectory v=0x20300 adds a 64-bit codeLimit at offset 56.
@@ -194,6 +194,26 @@ internal object MachOInspector {
                 if (expectedSlots != codeSlots) return false
                 if (hashOffset > cdLength || codeSlots * hashSize > cdLength - hashOffset) return false
                 if (specialSlots * hashSize > hashOffset) return false
+                val fixedHeaderSize = when {
+                    version >= 0x20600L -> 108L
+                    version >= 0x20500L -> 96L
+                    version >= 0x20400L -> 88L
+                    version >= 0x20300L -> 64L
+                    version >= 0x20200L -> 48L
+                    else -> 44L
+                }
+                if (cdLength < fixedHeaderSize || identOffset < fixedHeaderSize ||
+                    identOffset >= hashOffset - specialSlots * hashSize) return false
+                val identifierEnd = identOffset.toInt()
+                val identifierLimit = (hashOffset - specialSlots * hashSize).toInt()
+                var hasIdentifierTerminator = false
+                for (position in identifierEnd until identifierLimit) {
+                    if (bytes[cd + position].toInt() == 0) {
+                        hasIdentifierTerminator = true
+                        break
+                    }
+                }
+                if (!hasIdentifierTerminator) return false
                 if (codeLimit > codeLength.toLong() || codeStart < 0 || codeStart.toLong() + codeLength > bytes.size) return false
 
                 val algorithm = when (hashType) {
