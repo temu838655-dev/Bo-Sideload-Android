@@ -122,6 +122,9 @@ internal class InstallationProxyClient(
 
                 val status = response["Status"] as? String
                 val errorName = response["Error"] as? String
+                if (status.isNullOrBlank() && errorName.isNullOrBlank()) {
+                    throw IOException("installation_proxy returned a status without Status or Error")
+                }
                 val errorDescription = response["ErrorDescription"] as? String
                 val percent = (response["PercentComplete"] as? Number)?.toInt()
                 val progress = InstallationProgress(
