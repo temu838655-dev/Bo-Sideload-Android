@@ -26,7 +26,7 @@ Bo Sideload is an Android app for inspecting IPA packages and **re-signing them 
 ## Upstream engine and license
 
 - Engine: [zhlynn/zsign](https://github.com/zhlynn/zsign)
-- Version: `v1.1.2`
+- Version: `v1.1.3`
 - License: MIT; see [third_party/zsign/LICENSE](third_party/zsign/LICENSE).
 - Android release binaries are downloaded during GitHub Actions and checked against the published SHA-256 digests before being included in the APK. The binaries are not hand-modified.
 - zsign supports IPA re-signing, P12 keys, provisioning profiles, metadata changes, and certificate inspection. See its upstream README for the full command reference.
