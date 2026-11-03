@@ -70,7 +70,11 @@ class AppleConnectActivity : Activity() {
             setOnClickListener { exportP12() }
         }, full())
         page.addView(Button(this).apply {
-            text = "⑧ Tạo provisioning profile"; isAllCaps = false
+            text = "⑧ Lấy danh sách App ID / certificate / thiết bị"; isAllCaps = false
+            setOnClickListener { loadAppleResourceIds() }
+        }, full())
+        page.addView(Button(this).apply {
+            text = "⑨ Tạo provisioning profile"; isAllCaps = false
             setOnClickListener { createProvisioningProfile() }
         }, full())
         page.addView(Button(this).apply {
@@ -260,6 +264,19 @@ class AppleConnectActivity : Activity() {
                 }.start()
             }
             .show()
+    }
+
+    private fun loadAppleResourceIds() {
+        val credentials = runCatching { vault.load() }.getOrNull()
+        if (credentials == null) {
+            status.text = "Chưa lưu Team API Key. Hãy kết nối và kiểm tra Apple API trước."
+            return
+        }
+        status.text = "Đang đọc danh sách App ID, certificate và thiết bị từ Apple…"
+        Thread {
+            val result = AppleProvisioningProfileManager.listResources(credentials)
+            runOnUiThread { status.text = result.message }
+        }.start()
     }
 
     private fun createProvisioningProfile() {
