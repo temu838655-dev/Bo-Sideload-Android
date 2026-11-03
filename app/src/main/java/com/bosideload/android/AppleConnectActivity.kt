@@ -10,6 +10,7 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.text.InputType
 import java.io.ByteArrayOutputStream
 
 /** Paid Apple Developer connection. Never asks for Apple ID password or 2FA. */
@@ -20,6 +21,7 @@ class AppleConnectActivity : Activity() {
     private lateinit var vault: AppleConnectCredentialVault
     private var p8: String? = null
     private var currentCsr: String? = null
+    private var pendingP12: ByteArray? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -63,6 +65,10 @@ class AppleConnectActivity : Activity() {
             setOnClickListener { confirmCertificateCreation("DISTRIBUTION") }
         }, full())
         page.addView(Button(this).apply {
+            text = "⑦ Xuất chứng chỉ và khóa riêng thành P12"; isAllCaps = false
+            setOnClickListener { exportP12() }
+        }, full())
+        page.addView(Button(this).apply {
             text = "Xóa toàn bộ khóa API và khóa ký đã lưu"; isAllCaps = false
             setOnClickListener {
                 vault.clear(); p8 = null; keyId.text.clear(); issuerId.text.clear()
@@ -102,8 +108,27 @@ class AppleConnectActivity : Activity() {
     @Deprecated("Deprecated in Android")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (resultCode != RESULT_OK) return
+        if (resultCode != RESULT_OK) {
+            if (requestCode == 812) {
+                pendingP12?.fill(0); pendingP12 = null
+                status.text = "Đã hủy xuất P12; dữ liệu tạm đã được xóa khỏi bộ nhớ."
+            }
+            return
+        }
         val uri: Uri = data?.data ?: return
+        if (requestCode == 812) {
+            val bytes = pendingP12 ?: run { status.text = "Không còn dữ liệu P12 để xuất."; return }
+            try {
+                contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
+                    ?: error("Không mở được tệp đích.")
+                status.text = "Đã xuất P12. Hãy giữ mật khẩu an toàn; ứng dụng không lưu mật khẩu này."
+            } catch (e: Exception) {
+                status.text = "Không thể ghi P12: " + (e.message ?: "lỗi ghi tệp")
+            } finally {
+                bytes.fill(0); pendingP12 = null
+            }
+            return
+        }
         if (requestCode == 811) {
             val csr = currentCsr ?: run { status.text = "Chưa có CSR. Hãy tạo CSR trước."; return }
             try {
@@ -169,6 +194,50 @@ class AppleConnectActivity : Activity() {
             putExtra(Intent.EXTRA_TITLE, "Bo-Sideload-iOS.csr")
         }
         startActivityForResult(intent, 811)
+    }
+
+    private fun exportP12() {
+        val material = runCatching { vault.loadSigningMaterial() }.getOrNull()
+        val certificate = runCatching { vault.loadIssuedCertificate() }.getOrNull()
+        if (material == null || certificate == null) {
+            status.text = "Cần tạo khóa/CSR và được Apple cấp chứng chỉ trước khi xuất P12."
+            return
+        }
+        val passwordInput = EditText(this).apply {
+            hint = "Mật khẩu P12 (ít nhất 12 ký tự)"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setSingleLine(true)
+        }
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Đặt mật khẩu cho P12")
+            .setMessage("P12 chứa khóa riêng. Mật khẩu chỉ dùng để tạo tệp, không được lưu trong ứng dụng. Hãy ghi nhớ mật khẩu này.")
+            .setView(passwordInput)
+            .setNegativeButton("Hủy", null)
+            .setPositiveButton("Tạo P12") { _, _ ->
+                val password = passwordInput.text.toString().toCharArray()
+                passwordInput.text?.clear()
+                status.text = "Đang đóng gói P12 cục bộ…"
+                Thread {
+                    val result = runCatching { AppleP12Exporter.export(material, certificate, password) }
+                    password.fill(0.toChar())
+                    runOnUiThread {
+                        result.onSuccess { bytes ->
+                            pendingP12?.fill(0)
+                            pendingP12 = bytes
+                            val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                                addCategory(Intent.CATEGORY_OPENABLE)
+                                type = "application/x-pkcs12"
+                                putExtra(Intent.EXTRA_TITLE, "Bo-Sideload-iOS-Signing.p12")
+                            }
+                            status.text = "Đã tạo P12 trong bộ nhớ tạm. Chọn nơi lưu tệp."
+                            startActivityForResult(intent, 812)
+                        }.onFailure {
+                            status.text = "Không thể tạo P12: " + (it.message ?: "lỗi không xác định")
+                        }
+                    }
+                }.start()
+            }
+            .show()
     }
 
     private fun confirmCertificateCreation(type: String) {
