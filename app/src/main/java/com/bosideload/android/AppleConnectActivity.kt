@@ -85,7 +85,7 @@ class AppleConnectActivity : Activity() {
         }
         page.addView(status, full())
         page.addView(label(
-            "Apple chỉ cho tải private key .p8 một lần. Nếu mất hoặc lộ khóa, hãy thu hồi key và tạo key mới. Individual API Key không dùng được Provisioning endpoints. Bản này chỉ kiểm tra kết nối, chưa tạo certificate/profile hoặc đăng ký UDID.",
+            "Apple chỉ cho tải private key .p8 một lần. Nếu mất hoặc lộ khóa, hãy thu hồi key và tạo key mới. Individual API Key không dùng được Provisioning endpoints. Bản này hỗ trợ kiểm tra Team API, tạo certificate và provisioning profile theo xác nhận riêng. Việc đăng ký UDID và kiểm thử ký/cài IPA trên iPhone thật vẫn cần hoàn thiện.",
             13, 0xFFFFD28A.toInt(), true), full())
         page.addView(Button(this).apply { text = "Quay lại"; isAllCaps = false; setOnClickListener { finish() } }, full())
         currentCsr = runCatching { vault.loadSigningMaterial()?.csrPem }.getOrNull()
