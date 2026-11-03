@@ -29,6 +29,7 @@ class MainActivity : Activity() {
     private lateinit var p12Button: Button
     private lateinit var profileButton: Button
     private lateinit var signButton: Button
+    private lateinit var installSignedButton: Button
     private lateinit var signingStatus: TextView
     private var selectedIpaUri: Uri? = null
     private var selectedIpaName: String = "BoSideload-signed.ipa"
@@ -85,6 +86,24 @@ class MainActivity : Activity() {
                 startActivity(Intent(this@MainActivity, DeviceConnectionActivity::class.java))
             }
         }, fullWidth())
+        installSignedButton = Button(this).apply {
+            text = "Cài IPA đã ký lên iPhone qua USB"
+            isAllCaps = false
+            isEnabled = false
+            visibility = android.view.View.GONE
+            setOnClickListener {
+                val signed = pendingSignedFile
+                if (signed == null || !signed.isFile || !signed.canRead()) {
+                    signingStatus.text = "Không tìm thấy IPA đã ký. Hãy ký lại tệp trước."
+                    installSignedButton.isEnabled = false
+                    return@setOnClickListener
+                }
+                startActivity(Intent(this@MainActivity, DeviceConnectionActivity::class.java).apply {
+                    putExtra(DeviceConnectionActivity.EXTRA_SIGNED_IPA_PATH, signed.absolutePath)
+                })
+            }
+        }
+        page.addView(installSignedButton, fullWidth())
 
         page.addView(Button(this).apply {
             text = "Apple ID miễn phí • iPhone / MacBook / Apple TV"
@@ -242,6 +261,8 @@ class MainActivity : Activity() {
                 signingStatus.text = result.message
                 if (result.success && signedFile != null) {
                     pendingSignedFile = signedFile
+                    installSignedButton.visibility = android.view.View.VISIBLE
+                    installSignedButton.isEnabled = true
                     val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
                         addCategory(Intent.CATEGORY_OPENABLE)
                         type = "application/octet-stream"
@@ -287,12 +308,10 @@ class MainActivity : Activity() {
                 val output = contentResolver.openOutputStream(destination)
                     ?: throw IllegalStateException("Không mở được vị trí lưu.")
                 output.use { target -> source.inputStream().use { it.copyTo(target) } }
-                source.delete()
-                "✓ Đã xuất IPA đã ký. Bạn vẫn cần phương thức cài đặt tương thích và profile hợp lệ trên iPhone."
+                "✓ Đã xuất bản sao IPA đã ký. Bản tạm vẫn được giữ trong ứng dụng để dùng cho bước cài qua USB."
             } catch (error: Exception) {
                 "Không xuất được IPA: ${error.message ?: "lỗi không xác định"}"
             }
-            if (message.startsWith("✓")) pendingSignedFile = null
             runOnUiThread { signingStatus.text = message }
         }.start()
     }
