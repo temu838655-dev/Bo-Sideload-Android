@@ -22,8 +22,8 @@ Bo Sideload is an Android app for inspecting IPA packages and re-signing them lo
 - A successful zsign operation means an output IPA was generated; it does not guarantee that iOS will accept or launch it.
 - USB installation requires a compatible OTG/data cable, Android USB permission, an unlocked iPhone, an accepted Apple trust/pairing record, and a profile that authorizes the target device.
 - The USB pairing and installation implementation is present in the app, but it has **not yet been validated end-to-end on a physical Android + iPhone combination**. GitHub Actions success proves compilation and automated tests only; it does not prove real-device USB compatibility or successful installation. Treat the feature as experimental until that test is completed.
-- Discover Apple Wi-Fi Sync Bonjour/mDNS advertisements on the same local network. Discovery is only a candidate list; device identity is not trusted until an existing pairing record is cryptographically validated.
-- Wi-Fi pairing, authenticated service transport, IPA transfer and installation are not implemented yet.
+- Discover Apple Wi-Fi Sync Bonjour/mDNS advertisements and compare the short `authTag` against locally stored Lockdown `HostID` values. A match identifies a candidate only; it is **not device authentication**.
+- Wi-Fi Lockdown TLS authentication, RemotePairing, IPA transfer and Wi-Fi installation are not implemented yet.
 - Supported native signing-engine ABIs: `arm64-v8a` and `armeabi-v7a`.
 
 ## Important security boundaries
