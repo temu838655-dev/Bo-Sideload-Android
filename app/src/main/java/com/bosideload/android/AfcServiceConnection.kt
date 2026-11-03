@@ -20,8 +20,8 @@ import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter
 /**
  * TLS upgrade for a Lockdown StartService endpoint.
  *
- * Apple service TLS uses the paired RootCertificate/RootPrivateKey as the
- * client identity. The peer certificate is pinned to the paired device cert.
+ * Apple service TLS presents the paired HostCertificate/HostPrivateKey as
+ * the client identity. The peer certificate is pinned to the paired device cert.
  * This performs TLS directly on the newly connected service stream; it does
  * not send a second Lockdown StartSession request.
  */
@@ -116,12 +116,12 @@ internal class PairedServiceTlsSocket private constructor(
             require(bytes.isNotEmpty() && bytes.size <= PairRecordCodec.MAX_FIELD_BYTES)
             PEMParser(StringReader(String(bytes, Charsets.US_ASCII))).use { parser ->
                 val value = parser.readObject()
-                    ?: throw IllegalArgumentException("paired root private key is empty")
+                    ?: throw IllegalArgumentException("paired private key is empty")
                 val converter = JcaPEMKeyConverter()
                 return when (value) {
                     is org.bouncycastle.openssl.PEMKeyPair -> converter.getKeyPair(value).private
                     is org.bouncycastle.asn1.pkcs.PrivateKeyInfo -> converter.getPrivateKey(value)
-                    else -> throw IllegalArgumentException("unsupported paired root private key PEM")
+                    else -> throw IllegalArgumentException("unsupported paired private key PEM")
                 }
             }
         }
