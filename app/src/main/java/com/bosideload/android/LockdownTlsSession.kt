@@ -104,17 +104,17 @@ internal class LockdownTlsSession private constructor(
         }
 
         private fun createSslContext(record: PairRecord): SSLContext {
-            val hostCertificate = parseCertificate(record.hostCertificate)
+            val rootCertificate = parseCertificate(record.rootCertificate)
             val deviceCertificate = parseCertificate(record.deviceCertificate)
-            val hostPrivateKey = parsePrivateKey(record.hostKeyMaterial)
+            val rootPrivateKey = parsePrivateKey(record.rootKeyMaterial)
 
             val identityStore = KeyStore.getInstance(KeyStore.getDefaultType()).apply {
                 load(null)
                 setKeyEntry(
-                    "bo-lockdown-host",
-                    hostPrivateKey,
+                    "bo-lockdown-root",
+                    rootPrivateKey,
                     CharArray(0),
-                    arrayOf(hostCertificate)
+                    arrayOf(rootCertificate)
                 )
             }
             val keyManagers = KeyManagerFactory.getInstance(
