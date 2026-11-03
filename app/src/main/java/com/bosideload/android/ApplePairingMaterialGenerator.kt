@@ -64,7 +64,7 @@ internal object ApplePairingMaterialGenerator {
         val rootHolder = certificate(
             subject = rootName,
             issuer = rootName,
-            publicKey = rootPair,
+            publicKey = rootPair.public,
             issuerKey = rootPair,
             notBefore = notBefore,
             notAfter = notAfter,
@@ -74,7 +74,7 @@ internal object ApplePairingMaterialGenerator {
         val hostHolder = certificate(
             subject = hostName,
             issuer = rootName,
-            publicKey = hostPair,
+            publicKey = hostPair.public,
             issuerKey = rootPair,
             notBefore = notBefore,
             notAfter = notAfter,
