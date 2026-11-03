@@ -56,6 +56,40 @@ class InstallationProxyClientTest {
     }
 
     @Test
+    fun installReportsEveryProgressUpdateAndSendsClientOptions() {
+        val responses = listOf(
+            mapOf("Status" to "CreatingStagingDirectory", "PercentComplete" to 0L),
+            mapOf("Status" to "Installing", "PercentComplete" to 45L),
+            mapOf("Status" to "Complete", "PercentComplete" to 100L)
+        ).map { LockdownPlistCodec.encode(it) }
+        val incoming = ByteArrayOutputStream().apply {
+            responses.forEach { write(PropertyListServiceCodec.encode(it)) }
+        }.toByteArray()
+        val output = ByteArrayOutputStream()
+        val progress = mutableListOf<InstallationProgress>()
+        val options = mapOf<String, Any?>("ApplicationType" to "User")
+        val client = InstallationProxyClient(ByteArrayInputStream(incoming), output)
+
+        client.install(
+            remotePackagePath = "/PublicStaging/test.ipa",
+            clientOptions = options,
+            onProgress = progress::add
+        )
+
+        assertEquals(
+            listOf("CreatingStagingDirectory", "Installing", "Complete"),
+            progress.map { it.status }
+        )
+        assertEquals(listOf(0, 45, 100), progress.map { it.percentComplete })
+
+        val command = LockdownPlistCodec.decode(
+            PropertyListServiceCodec.read(output.toByteArray().inputStream())
+        )
+        assertEquals("Install", command["Command"])
+        assertEquals(options, command["ClientOptions"])
+    }
+
+    @Test
     fun installFailsOnDeviceReportedError() {
         val response = LockdownPlistCodec.encode(
             mapOf("Status" to "Error", "Error" to "ApplicationVerificationFailed", "ErrorDescription" to "signature invalid")
