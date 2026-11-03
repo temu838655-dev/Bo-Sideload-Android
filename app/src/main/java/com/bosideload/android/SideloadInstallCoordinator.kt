@@ -8,12 +8,16 @@ import java.util.UUID
  * Coordinates the protocol sequence after a trusted Lockdown TLS session exists:
  * StartService(AFC) -> upload IPA -> StartService(installation_proxy) -> Install.
  *
- * The caller is responsible for selecting the correct attached iPhone deviceId
- * and supplying a fresh AndroidUsbMuxTransport for each service connection.
+ * Each StartService request runs in a short-lived Lockdown session which is
+ * closed before opening that service's USBMux Connect stream. Android USB Host
+ * exposes one claimed USBMux interface; overlapping Lockdown and service
+ * transports can contend for the same endpoints.
+ *
+ * The caller supplies factories for fresh Lockdown and service transports.
  * This class does not perform code signing or create a pairing record.
  */
 internal class SideloadInstallCoordinator(
-    private val lockdownChannel: LockdownSessionChannel,
+    private val openLockdownSession: () -> LockdownServiceSession,
     private val deviceId: Long,
     private val pairRecord: PairRecord,
     private val newTransport: () -> UsbMuxTransport
@@ -53,10 +57,12 @@ internal class SideloadInstallCoordinator(
 
         val remotePath = "/PublicStaging/BoSideload-${UUID.randomUUID()}.ipa"
 
-        val afcDescriptor = LockdownServiceStarter.start(
-            channel = lockdownChannel,
-            identifier = AfcServiceConnection.AFC_SERVICE_IDENTIFIER
-        )
+        val afcDescriptor = openLockdownSession().use { lockdown ->
+            LockdownServiceStarter.start(
+                channel = lockdown.channel,
+                identifier = AfcServiceConnection.AFC_SERVICE_IDENTIFIER
+            )
+        }
         val upload = AfcServiceConnection.open(
             transport = newTransport(),
             deviceId = deviceId,
@@ -79,10 +85,12 @@ internal class SideloadInstallCoordinator(
             }
         }
 
-        val installationDescriptor = LockdownServiceStarter.start(
-            channel = lockdownChannel,
-            identifier = InstallationProxyServiceConnection.SERVICE_IDENTIFIER
-        )
+        val installationDescriptor = openLockdownSession().use { lockdown ->
+            LockdownServiceStarter.start(
+                channel = lockdown.channel,
+                identifier = InstallationProxyServiceConnection.SERVICE_IDENTIFIER
+            )
+        }
         InstallationProxyServiceConnection.open(
             transport = newTransport(),
             deviceId = deviceId,
