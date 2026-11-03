@@ -109,6 +109,13 @@ class PairedHostIdentityValidatorTest {
             pair.public
         )
         builder.addExtension(Extension.basicConstraints, true, BasicConstraints(issuerIdentity == null))
+        if (issuerIdentity == null) {
+            builder.addExtension(
+                Extension.keyUsage,
+                true,
+                KeyUsage(KeyUsage.keyCertSign or KeyUsage.cRLSign)
+            )
+        }
         if (issuerIdentity != null) {
             builder.addExtension(
                 Extension.keyUsage,
