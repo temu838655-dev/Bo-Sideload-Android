@@ -43,18 +43,18 @@ internal class UsbMuxDeviceMonitor(
      */
     private fun openAcceptedListenSession(): UsbMuxListenSession {
         val candidates = (0 until device.interfaceCount)
-            .map { device.getInterface(it) }
-            .filter {
-                it.interfaceClass == 0xFF &&
-                    it.interfaceSubclass == 0xFE &&
-                    it.interfaceProtocol == 0x02 &&
-                    (0 until it.endpointCount).any { e ->
-                        val ep = it.getEndpoint(e)
+            .map { index -> index to device.getInterface(index) }
+            .filter { (_, candidate) ->
+                candidate.interfaceClass == 0xFF &&
+                    candidate.interfaceSubclass == 0xFE &&
+                    candidate.interfaceProtocol == 0x02 &&
+                    (0 until candidate.endpointCount).any { e ->
+                        val ep = candidate.getEndpoint(e)
                         ep.type == android.hardware.usb.UsbConstants.USB_ENDPOINT_XFER_BULK &&
                             ep.direction == android.hardware.usb.UsbConstants.USB_DIR_IN
                     } &&
-                    (0 until it.endpointCount).any { e ->
-                        val ep = it.getEndpoint(e)
+                    (0 until candidate.endpointCount).any { e ->
+                        val ep = candidate.getEndpoint(e)
                         ep.type == android.hardware.usb.UsbConstants.USB_ENDPOINT_XFER_BULK &&
                             ep.direction == android.hardware.usb.UsbConstants.USB_DIR_OUT
                     }
@@ -64,13 +64,16 @@ internal class UsbMuxDeviceMonitor(
         }
 
         val failures = mutableListOf<String>()
-        for (candidate in candidates) {
+        for ((listIndex, candidate) in candidates) {
             if (stopped.get()) throw java.io.IOException("Đã dừng dò interface USBMux.")
             var session: UsbMuxListenSession? = null
             try {
                 listener.onStatus(
-                    "Đang thử USBMux interface id=${candidate.id} " +
-                        "(${candidates.indexOf(candidate) + 1}/${candidates.size})…"
+                    "Đang thử USBMux interface id=${candidate.id}, listIndex=$listIndex " +
+                        "(class=0x${candidate.interfaceClass.toString(16)}, " +
+                        "subclass=0x${candidate.interfaceSubclass.toString(16)}, " +
+                        "protocol=0x${candidate.interfaceProtocol.toString(16)}; " +
+                        "${listIndex + 1}/${candidates.size})…"
                 )
                 val transport = AndroidUsbMuxTransport.open(
                     usbManager,
@@ -83,7 +86,7 @@ internal class UsbMuxDeviceMonitor(
                 when (val first = session.readNextResponse()) {
                     is UsbMuxResponseParser.Response.Result -> {
                         if (first.number == 0L) {
-                            listener.onStatus("USBMux Listen được chấp nhận trên interface id=${candidate.id}.")
+                            listener.onStatus("USBMux Listen được chấp nhận trên interface id=${candidate.id}, listIndex=$listIndex.")
                             return session
                         }
                         throw java.io.IOException("Listen Result=${first.number}")
@@ -93,7 +96,7 @@ internal class UsbMuxDeviceMonitor(
             } catch (error: Exception) {
                 try { session?.close() } catch (_: Exception) {}
                 val detail = error.message ?: error.javaClass.simpleName
-                failures += "interface ${candidate.id}: $detail"
+                failures += "interface id=${candidate.id} (listIndex=$listIndex, class=0x${candidate.interfaceClass.toString(16)}/0x${candidate.interfaceSubclass.toString(16)}/0x${candidate.interfaceProtocol.toString(16)}): $detail"
             }
         }
         throw java.io.IOException(
