@@ -26,6 +26,7 @@ internal class AndroidUsbMuxTransport private constructor(
 ) : UsbMuxTransport {
 
     private val closed = AtomicBoolean(false)
+    private val transferContext: String = "USBMux interface id=${usbInterface.id}, IN=0x${input.address.toString(16).padStart(2, '0')} (maxPacket=${input.maxPacketSize}), OUT=0x${output.address.toString(16).padStart(2, '0')} (maxPacket=${output.maxPacketSize})"
 
     @Synchronized
     @Throws(IOException::class)
@@ -38,7 +39,7 @@ internal class AndroidUsbMuxTransport private constructor(
             val count = connection.bulkTransfer(
                 output, packet, offset, length, timeoutMs
             )
-            if (count <= 0) throw IOException("USB bulk OUT failed or timed out (result=$count)")
+            if (count <= 0) throw IOException("USB bulk OUT failed (result=$count; $transferContext)")
             offset += count
         }
     }
@@ -78,7 +79,7 @@ internal class AndroidUsbMuxTransport private constructor(
             val count = connection.bulkTransfer(
                 output, bytes, offset + written, chunk, timeoutMs
             )
-            if (count <= 0) throw IOException("USB raw bulk OUT failed or timed out (result=$count)")
+            if (count <= 0) throw IOException("USB raw bulk OUT failed (result=$count; $transferContext)")
             written += count
         }
     }
@@ -100,7 +101,7 @@ internal class AndroidUsbMuxTransport private constructor(
             // Android UsbDeviceConnection.bulkTransfer() returns 0 when no
             // bytes arrive before the transfer timeout on supported API levels.
             // Treat it as a timeout instead of spinning and repeatedly polling.
-            if (count <= 0) throw IOException("USB raw bulk IN failed or timed out (result=$count)")
+            if (count <= 0) throw IOException("USB raw bulk IN failed (result=$count; $transferContext)")
             return count
         }
     }
@@ -115,7 +116,7 @@ internal class AndroidUsbMuxTransport private constructor(
             )
             // bulkTransfer() may return 0 on timeout. Do not retry in a tight
             // loop: surface the timeout so the monitor can close and recover.
-            if (count <= 0) throw EOFException("USB bulk IN failed or timed out (result=$count)")
+            if (count <= 0) throw EOFException("USB bulk IN failed (result=$count; $transferContext)")
             offset += count
         }
     }
