@@ -79,7 +79,7 @@ internal class UsbMuxDeviceMonitor(
                     usbManager,
                     device,
                     timeoutMs = AndroidUsbMuxTransport.DEFAULT_TIMEOUT_MS,
-                    interfaceId = candidate.id
+                    interfaceIndex = listIndex
                 )
                 session = UsbMuxListenSession(transport)
                 session.start()
