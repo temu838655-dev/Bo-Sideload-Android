@@ -20,13 +20,14 @@ import java.util.concurrent.atomic.AtomicBoolean
 internal class AndroidUsbMuxTransport private constructor(
     private val connection: UsbDeviceConnection,
     private val usbInterface: UsbInterface,
+    private val interfaceListIndex: Int,
     private val input: UsbEndpoint,
     private val output: UsbEndpoint,
     private val timeoutMs: Int
 ) : UsbMuxTransport {
 
     private val closed = AtomicBoolean(false)
-    private val transferContext: String = "USBMux interface id=${usbInterface.id}, IN=0x${input.address.toString(16).padStart(2, '0')} (maxPacket=${input.maxPacketSize}), OUT=0x${output.address.toString(16).padStart(2, '0')} (maxPacket=${output.maxPacketSize})"
+    private val transferContext: String = "USBMux interface id=${usbInterface.id} (listIndex=${interfaceListIndex}), IN=0x${input.address.toString(16).padStart(2, '0')} (maxPacket=${input.maxPacketSize}), OUT=0x${output.address.toString(16).padStart(2, '0')} (maxPacket=${output.maxPacketSize})"
 
     @Synchronized
     @Throws(IOException::class)
@@ -148,18 +149,26 @@ internal class AndroidUsbMuxTransport private constructor(
             usbManager: UsbManager,
             device: UsbDevice,
             timeoutMs: Int = DEFAULT_TIMEOUT_MS,
-            interfaceId: Int? = null
+            interfaceIndex: Int? = null
         ): AndroidUsbMuxTransport {
             require(timeoutMs >= 0) { "timeout must not be negative; use 0 for an indefinite USB read" }
+            require(interfaceIndex == null || interfaceIndex in 0 until device.interfaceCount) {
+                "USB interface list index is out of range: $interfaceIndex"
+            }
             check(usbManager.hasPermission(device)) { "Android USB permission has not been granted" }
 
             var selected: UsbInterface? = null
+            var selectedIndex = -1
             var input: UsbEndpoint? = null
             var output: UsbEndpoint? = null
 
             for (index in 0 until device.interfaceCount) {
                 val candidate = device.getInterface(index)
-                if (interfaceId != null && candidate.id != interfaceId) continue
+                // UsbInterface.id is not unique on every Android USB device.
+                // Select by descriptor list position when the caller is probing
+                // multiple candidates, otherwise a repeated id can reopen the
+                // first matching interface on every attempt.
+                if (interfaceIndex != null && index != interfaceIndex) continue
                 if (candidate.interfaceClass != USBMUX_CLASS ||
                     candidate.interfaceSubclass != USBMUX_SUBCLASS ||
                     candidate.interfaceProtocol != USBMUX_PROTOCOL) continue
@@ -176,6 +185,7 @@ internal class AndroidUsbMuxTransport private constructor(
                 }
                 if (candidateIn != null && candidateOut != null) {
                     selected = candidate
+                    selectedIndex = index
                     input = candidateIn
                     output = candidateOut
                     break
@@ -193,7 +203,7 @@ internal class AndroidUsbMuxTransport private constructor(
                 connection.close()
                 throw IOException("Could not claim the Apple USBMux interface")
             }
-            return AndroidUsbMuxTransport(connection, usbInterface, inEndpoint, outEndpoint, timeoutMs)
+            return AndroidUsbMuxTransport(connection, usbInterface, selectedIndex, inEndpoint, outEndpoint, timeoutMs)
         }
 
         private const val USBMUX_CLASS = 0xFF
