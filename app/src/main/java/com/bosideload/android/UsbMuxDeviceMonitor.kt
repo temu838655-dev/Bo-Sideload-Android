@@ -122,8 +122,9 @@ internal class UsbMuxDeviceMonitor(
                 activeSession.close()
                 return
             }
-            activeSession.start()
-            listener.onStatus("Đã gửi yêu cầu usbmux Listen. Đang chờ iPhone phản hồi…")
+            // openAcceptedListenSession() already sent Listen and consumed Result(0).
+            // Do not start the same session twice.
+            listener.onStatus("usbmux Listen đã được xác nhận. Đang chờ sự kiện thiết bị…")
             while (!stopped.get()) {
                 when (val response = activeSession.readNextResponse()) {
                     is UsbMuxResponseParser.Response.Result -> {
