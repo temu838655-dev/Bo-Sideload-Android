@@ -51,14 +51,14 @@ internal class AndroidUsbMuxTransport private constructor(
             "invalid maximum packet size"
         }
         val headerBytes = ByteArray(UsbMuxPacketHeader.HEADER_SIZE)
-        readFully(headerBytes)
+        readFully(headerBytes, "packet header")
         val header = try {
             UsbMuxPacketHeader.decode(headerBytes, maxPacketSize)
         } catch (error: IllegalArgumentException) {
             throw IOException("Invalid usbmux packet header", error)
         }
         val payload = ByteArray((header.length - UsbMuxPacketHeader.HEADER_SIZE).toInt())
-        readFully(payload)
+        readFully(payload, "packet payload (${payload.size} bytes)")
         return UsbMuxPacketCodec.Packet(header, payload)
     }
 
@@ -106,7 +106,7 @@ internal class AndroidUsbMuxTransport private constructor(
         }
     }
 
-    private fun readFully(target: ByteArray) {
+    private fun readFully(target: ByteArray, phase: String) {
         var offset = 0
         while (offset < target.size) {
             checkOpen()
@@ -114,9 +114,15 @@ internal class AndroidUsbMuxTransport private constructor(
             val count = connection.bulkTransfer(
                 input, target, offset, length, timeoutMs
             )
-            // bulkTransfer() may return 0 on timeout. Do not retry in a tight
-            // loop: surface the timeout so the monitor can close and recover.
-            if (count <= 0) throw EOFException("USB bulk IN failed (result=$count; $transferContext)")
+            // Do not retry a failed transfer in a tight loop. Report which part
+            // of the usbmux frame was being read so diagnostics can distinguish
+            // a missing header from a truncated plist payload.
+            if (count <= 0) {
+                throw EOFException(
+                    "USB bulk IN failed while reading $phase (result=$count; " +
+                        "received=$offset/${target.size} bytes; $transferContext)"
+                )
+            }
             offset += count
         }
     }
