@@ -36,18 +36,78 @@ internal class UsbMuxDeviceMonitor(
         }
     }
 
+    /**
+     * Some iPhones expose more than one interface with identical usbmux
+     * descriptors. Probe each matching interface until Listen is explicitly
+     * acknowledged; do not assume the first descriptor is the active one.
+     */
+    private fun openAcceptedListenSession(): UsbMuxListenSession {
+        val candidates = (0 until device.interfaceCount)
+            .map { device.getInterface(it) }
+            .filter {
+                it.interfaceClass == 0xFF &&
+                    it.interfaceSubclass == 0xFE &&
+                    it.interfaceProtocol == 0x02 &&
+                    (0 until it.endpointCount).any { e ->
+                        val ep = it.getEndpoint(e)
+                        ep.type == android.hardware.usb.UsbConstants.USB_ENDPOINT_XFER_BULK &&
+                            ep.direction == android.hardware.usb.UsbConstants.USB_DIR_IN
+                    } &&
+                    (0 until it.endpointCount).any { e ->
+                        val ep = it.getEndpoint(e)
+                        ep.type == android.hardware.usb.UsbConstants.USB_ENDPOINT_XFER_BULK &&
+                            ep.direction == android.hardware.usb.UsbConstants.USB_DIR_OUT
+                    }
+            }
+        if (candidates.isEmpty()) {
+            throw java.io.IOException("Không tìm thấy interface USBMux có đủ bulk IN/OUT.")
+        }
+
+        val failures = mutableListOf<String>()
+        for (candidate in candidates) {
+            if (stopped.get()) throw java.io.IOException("Đã dừng dò interface USBMux.")
+            var session: UsbMuxListenSession? = null
+            try {
+                listener.onStatus(
+                    "Đang thử USBMux interface id=${candidate.id} " +
+                        "(${candidates.indexOf(candidate) + 1}/${candidates.size})…"
+                )
+                val transport = AndroidUsbMuxTransport.open(
+                    usbManager,
+                    device,
+                    timeoutMs = AndroidUsbMuxTransport.DEFAULT_TIMEOUT_MS,
+                    interfaceId = candidate.id
+                )
+                session = UsbMuxListenSession(transport)
+                session.start()
+                when (val first = session.readNextResponse()) {
+                    is UsbMuxResponseParser.Response.Result -> {
+                        if (first.number == 0L) {
+                            listener.onStatus("USBMux Listen được chấp nhận trên interface id=${candidate.id}.")
+                            return session
+                        }
+                        throw java.io.IOException("Listen Result=${first.number}")
+                    }
+                    else -> throw java.io.IOException("Phản hồi đầu tiên không phải Listen Result(0): $first")
+                }
+            } catch (error: Exception) {
+                try { session?.close() } catch (_: Exception) {}
+                val detail = error.message ?: error.javaClass.simpleName
+                failures += "interface ${candidate.id}: $detail"
+            }
+        }
+        throw java.io.IOException(
+            "Không interface USBMux nào xác nhận Listen. " + failures.joinToString(" | ")
+        )
+    }
+
     private fun runMonitor() {
         try {
             listener.onStatus("Đang mở giao diện USBMux của Apple…")
             // Never use an infinite bulkTransfer timeout. Some OTG adapters or
             // iOS USB states may not complete the first Listen write/read.
             // A bounded timeout keeps this worker recoverable.
-            val transport = AndroidUsbMuxTransport.open(
-                usbManager,
-                device,
-                timeoutMs = AndroidUsbMuxTransport.DEFAULT_TIMEOUT_MS
-            )
-            val activeSession = UsbMuxListenSession(transport)
+            val activeSession = openAcceptedListenSession()
             // Publish the session atomically with respect to close(). If close()
             // wins while USB is opening, do not start a listener on a stopped monitor.
             val shouldStart = synchronized(sessionLock) {
