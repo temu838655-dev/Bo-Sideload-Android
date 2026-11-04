@@ -97,10 +97,10 @@ internal class AndroidUsbMuxTransport private constructor(
         val chunk = minOf(MAX_BULK_TRANSFER_BYTES, length)
         while (true) {
             val count = connection.bulkTransfer(input, target, offset, chunk, timeoutMs)
-            if (count < 0) throw IOException("USB raw bulk IN failed or timed out (result=$count)")
-            // A USB zero-length packet is a valid transfer boundary, not EOF.
-            // Ignore it and continue waiting for actual service-stream bytes.
-            if (count == 0) continue
+            // Android UsbDeviceConnection.bulkTransfer() returns 0 when no
+            // bytes arrive before the transfer timeout on supported API levels.
+            // Treat it as a timeout instead of spinning and repeatedly polling.
+            if (count <= 0) throw IOException("USB raw bulk IN failed or timed out (result=$count)")
             return count
         }
     }
@@ -113,9 +113,9 @@ internal class AndroidUsbMuxTransport private constructor(
             val count = connection.bulkTransfer(
                 input, target, offset, length, timeoutMs
             )
-            if (count < 0) throw EOFException("USB bulk IN failed or timed out (result=$count)")
-            // Zero-length USB packets do not contribute bytes to the usbmux frame.
-            if (count == 0) continue
+            // bulkTransfer() may return 0 on timeout. Do not retry in a tight
+            // loop: surface the timeout so the monitor can close and recover.
+            if (count <= 0) throw EOFException("USB bulk IN failed or timed out (result=$count)")
             offset += count
         }
     }
