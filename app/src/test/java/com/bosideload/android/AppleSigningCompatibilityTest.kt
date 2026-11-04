@@ -1,5 +1,6 @@
 package com.bosideload.android
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -44,6 +45,110 @@ class AppleSigningCompatibilityTest {
         assertFalse(AppleSigningCompatibility.isAppInfoPlistPath("../Payload/Example.app/Info.plist"))
     }
 
+    @Test
+    fun recognizesNestedExtensionAndWatchBundleInfoPlistsForPreflightWarnings() {
+        assertTrue(AppleSigningCompatibility.isNestedCodeBundleInfoPlistPath(
+            "Payload/Example.app/PlugIns/Share.appex/Info.plist"
+        ))
+        assertTrue(AppleSigningCompatibility.isNestedCodeBundleInfoPlistPath(
+            "Payload/Example.app/Watch/ExampleWatch.app/Info.plist"
+        ))
+        assertFalse(AppleSigningCompatibility.isNestedCodeBundleInfoPlistPath(
+            "Payload/Example.app/Info.plist"
+        ))
+        assertFalse(AppleSigningCompatibility.isNestedCodeBundleInfoPlistPath(
+            "Payload/Example.app/PlugIns/../Info.plist"
+        ))
+        assertFalse(AppleSigningCompatibility.isNestedCodeBundleInfoPlistPath(
+            "Payload/Example.app/Resources/Info.plist"
+        ))
+    }
+
+    @Test
+    fun readsBundleIdentifiersFromNestedExtensionAndWatchPlists() {
+        val ipa = java.io.File.createTempFile("nested-bundles", ".ipa")
+        try {
+            java.util.zip.ZipOutputStream(ipa.outputStream()).use { zip ->
+                val plist = """<?xml version="1.0" encoding="UTF-8"?>
+                    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+                    <plist version="1.0"><dict>
+                    <key>CFBundleIdentifier</key><string>com.example.share</string>
+                    <key>CFBundleExecutable</key><string>ShareExtension</string>
+                    </dict></plist>""".trimIndent().toByteArray()
+                zip.putNextEntry(java.util.zip.ZipEntry(
+                    "Payload/Example.app/PlugIns/Share.appex/Info.plist"
+                ))
+                zip.write(plist)
+                zip.closeEntry()
+            }
+            val nested = AppleSigningCompatibility.inspectNestedCodeBundles(ipa)
+            assertTrue(nested.size == 1)
+            assertTrue(nested.single().bundleId == "com.example.share")
+            assertTrue(nested.single().executable == "ShareExtension")
+        } finally {
+            ipa.delete()
+        }
+    }
+
+    @Test
+    fun assignsDistinctProfilesToMainAppAndExtensionByBundleId() {
+        val profiles = listOf(
+            testProfile("ABCDE12345.com.example.app"),
+            testProfile("ABCDE12345.com.example.app.share")
+        )
+
+        val result = AppleSigningCompatibility.resolveProfileAssignments(
+            listOf("com.example.app", "com.example.app.share"), profiles
+        )
+
+        assertTrue(result.errors.isEmpty())
+        assertEquals(listOf(0, 1), result.assignments.map { it.profileIndex })
+    }
+
+    @Test
+    fun rejectsMissingOrAmbiguousProfileAssignments() {
+        val missing = AppleSigningCompatibility.resolveProfileAssignments(
+            listOf("com.example.app", "com.example.app.share"),
+            listOf(testProfile("ABCDE12345.com.example.app"))
+        )
+        assertTrue(missing.errors.any { it.contains("com.example.app.share") })
+
+        val ambiguous = AppleSigningCompatibility.resolveProfileAssignments(
+            listOf("com.example.app"),
+            listOf(
+                testProfile("ABCDE12345.com.example.app"),
+                testProfile("ABCDE12345.com.example.*")
+            )
+        )
+        assertTrue(ambiguous.errors.any { it.contains("nhiều provisioning profile") })
+    }
+
+    @Test
+    fun oneWildcardProfileCanCoverSeveralBundlesWithoutDuplicatingIt() {
+        val result = AppleSigningCompatibility.resolveProfileAssignments(
+            listOf("com.example.app", "com.example.app.share"),
+            listOf(testProfile("ABCDE12345.com.example.*"))
+        )
+
+        assertTrue(result.errors.isEmpty())
+        assertEquals(listOf(0, 0), result.assignments.map { it.profileIndex })
+    }
+
+    private fun testProfile(applicationId: String) = AppleProvisioningProfileReader.ProfileInfo(
+        name = "Test",
+        uuid = "UUID",
+        teamIdentifiers = listOf("ABCDE12345"),
+        applicationIdentifierPrefixes = listOf("ABCDE12345"),
+        bundleIdentifier = applicationId.substringAfter('.', applicationId),
+        teamBundleIdentifier = applicationId,
+        platforms = listOf("iOS"),
+        provisionedDevices = listOf("DEVICE"),
+        provisionsAllDevices = false,
+        creationDate = java.util.Date(0L),
+        expirationDate = java.util.Date(100_000L),
+        developerCertificateCount = 1,
+        developerCertificateSha256 = listOf("AA:BB")
+    )
     @Test
     fun profileApplicationIdentifierMustUseKnownTeamPrefix() {
         assertTrue(AppleSigningCompatibility.hasKnownProfilePrefix(
@@ -95,6 +200,45 @@ class AppleSigningCompatibilityTest {
         assertFalse(AppleSigningCompatibility.matchesApplicationIdentifier(
             "ABCDE12345.com.example.*", "com.examples.app"
         ))
+    }
+
+    @Test
+    fun rejectsExpiredProfileAndMismatchedCertificateFingerprint() {
+        val now = java.util.Date(10_000L)
+        val profile = AppleProvisioningProfileReader.ProfileInfo(
+            name = "Test",
+            uuid = "PROFILE-ID",
+            teamIdentifiers = listOf("ABCDE12345"),
+            applicationIdentifierPrefixes = listOf("ABCDE12345"),
+            bundleIdentifier = "com.example.app",
+            teamBundleIdentifier = "ABCDE12345.com.example.app",
+            platforms = listOf("iOS"),
+            provisionedDevices = listOf("DEVICE-1"),
+            provisionsAllDevices = false,
+            creationDate = java.util.Date(0L),
+            expirationDate = java.util.Date(9_000L),
+            developerCertificateCount = 1,
+            developerCertificateSha256 = listOf("AA:BB")
+        )
+        val certificate = AppleP12Reader.EntryInfo(
+            alias = "test",
+            hasPrivateKey = true,
+            subject = "CN=Test",
+            issuer = "CN=Apple",
+            notBefore = java.util.Date(0L),
+            notAfter = java.util.Date(20_000L),
+            sha256Fingerprint = "CC:DD"
+        )
+        val result = AppleSigningCompatibility.check(
+            ipa = IpaPlistReader.Metadata("Example", "com.example.app", "1.0", "1", "Example"),
+            profile = profile,
+            certificates = listOf(certificate),
+            now = now,
+            targetUdid = "DEVICE-1"
+        )
+        assertFalse(result.compatible)
+        assertTrue(result.errors.any { it.contains("hết hạn") })
+        assertTrue(result.errors.any { it.contains("fingerprint") })
     }
 
     @Test

@@ -46,6 +46,11 @@ internal object SignedIpaVerifier {
             return Result(false, "IPA đầu ra thiếu embedded.mobileprovision.")
         }
 
+        val nested = NestedCodeBundleVerifier.verify(outputIpa)
+        if (!nested.valid) {
+            return Result(false, "Bundle lồng không đạt kiểm tra cấu trúc: ${nested.message}")
+        }
+
         val executable = output.metadata?.executable?.takeIf { it.isNotBlank() }
             ?: return Result(false, "Info.plist không khai báo CFBundleExecutable.")
         if (executable.contains("/") || executable.contains("\\") || executable == "." || executable == "..") {
@@ -65,7 +70,7 @@ internal object SignedIpaVerifier {
 
         return Result(
             true,
-            "Đạt kiểm tra sau ký ở mức cấu trúc: ZIP đọc được, Bundle ID giữ nguyên, embedded.mobileprovision hiện diện; CodeDirectory chính khớp hash trang mã máy; Info.plist ở special slot 1, CodeResources ở special slot 3 và Entitlements ở special slot 5 (khi có blob Entitlements). Đây chỉ là kiểm tra cấu trúc và hash được hỗ trợ; chưa xác minh từng tài nguyên bên trong CodeResources, CMS, chuỗi chứng chỉ, thu hồi chứng chỉ, CodeDirectory phụ hoặc độ tin cậy Apple.",
+            "Đạt kiểm tra sau ký ở mức cấu trúc: ZIP đọc được, Bundle ID giữ nguyên, embedded.mobileprovision hiện diện; app chính và ${nested.checkedBundles} bundle lồng có CodeDirectory/CodeResources/Info.plist tương ứng với hash được hỗ trợ. Đây không phải xác minh CMS, toàn bộ sealed resources, chuỗi chứng chỉ, thu hồi chứng chỉ hoặc độ tin cậy Apple.",
             signedBundle
         )
     }

@@ -3,9 +3,11 @@
     <cloud-backup>
         <!-- Pairing ciphertext cannot be restored without its Android Keystore key. -->
         <exclude domain="sharedpref" path="bo_sideload_encrypted_pair_records.xml" />
+        <exclude domain="sharedpref" path="apple_connect_credentials.xml" />
     </cloud-backup>
     <device-transfer>
         <!-- Require the user to pair again after moving to another device. -->
         <exclude domain="sharedpref" path="bo_sideload_encrypted_pair_records.xml" />
+        <exclude domain="sharedpref" path="apple_connect_credentials.xml" />
     </device-transfer>
 </data-extraction-rules>

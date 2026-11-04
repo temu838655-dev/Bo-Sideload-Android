@@ -39,7 +39,7 @@ internal object LockdownResponseParser {
         val serviceSsl = message["EnableServiceSSL"] as? Boolean
         return Response.Success(
             request = request,
-            value = message["Value"],
+            value = message["Value"] ?: message["Type"],
             sessionId = sessionId,
             enableSessionSsl = ssl,
             escrowBag = message["EscrowBag"] as? ByteArray,

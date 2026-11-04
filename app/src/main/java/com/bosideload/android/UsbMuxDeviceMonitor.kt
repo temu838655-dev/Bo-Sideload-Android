@@ -7,7 +7,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Background listener for usbmux device attach/detach notifications. USB reads
- * wait until an event arrives; close() releases the USB connection to stop the wait.
+ * use bounded transfer timeouts so a stalled OTG adapter cannot block forever.
  * A successful Listen acknowledgement is not a Lockdown pairing.
  */
 internal class UsbMuxDeviceMonitor(
@@ -30,9 +30,7 @@ internal class UsbMuxDeviceMonitor(
     @Synchronized
     fun start() {
         check(worker == null) { "USBMux monitor has already been started" }
-        worker = Thread({
-            runMonitor()
-        }, "BoSideload-usbmux-listener").apply {
+        worker = Thread({ runMonitor() }, "BoSideload-usbmux-listener").apply {
             isDaemon = true
             start()
         }
@@ -41,7 +39,14 @@ internal class UsbMuxDeviceMonitor(
     private fun runMonitor() {
         try {
             listener.onStatus("Đang mở giao diện USBMux của Apple…")
-            val transport = AndroidUsbMuxTransport.open(usbManager, device, timeoutMs = 0)
+            // Never use an infinite bulkTransfer timeout. Some OTG adapters or
+            // iOS USB states may not complete the first Listen write/read.
+            // A bounded timeout keeps this worker recoverable.
+            val transport = AndroidUsbMuxTransport.open(
+                usbManager,
+                device,
+                timeoutMs = AndroidUsbMuxTransport.DEFAULT_TIMEOUT_MS
+            )
             val activeSession = UsbMuxListenSession(transport)
             // Publish the session atomically with respect to close(). If close()
             // wins while USB is opening, do not start a listener on a stopped monitor.
@@ -82,7 +87,10 @@ internal class UsbMuxDeviceMonitor(
             }
         } finally {
             synchronized(sessionLock) {
-                try { session?.close() } catch (_: Exception) { }
+                try {
+                    session?.close()
+                } catch (_: Exception) {
+                }
                 session = null
             }
             if (stopped.get()) listener.onStatus("Đã dừng theo dõi usbmux.")
@@ -93,7 +101,10 @@ internal class UsbMuxDeviceMonitor(
         if (!stopped.compareAndSet(false, true)) return
         // Closing the session releases the claimed interface and unblocks I/O.
         synchronized(sessionLock) {
-            try { session?.close() } catch (_: Exception) { }
+            try {
+                session?.close()
+            } catch (_: Exception) {
+            }
         }
     }
 }

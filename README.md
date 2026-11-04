@@ -7,8 +7,10 @@ Bo Sideload is an Android app for inspecting IPA packages and re-signing them lo
 - Open IPA files with Android's document picker and inspect ZIP paths, archive safety, app metadata, Bundle ID and common signing files.
 - Keep a recent IPA list and export/share files.
 - Select a P12 signing identity and provisioning profile; enter the P12 password for that signing operation only.
+- Before launching zsign, the app exports the single P12 identity to short-lived PEM files inside its private cache directory and invokes zsign with `-k` + `-c`; the P12 password is not placed in the native process argument list. The unencrypted private-key file is restricted to the app UID and deleted after signing; stale temporary directories older than one hour are cleaned at the next signing operation. File deletion is not guaranteed secure erasure on flash storage.
 - Run zsign locally on Android and export the signed IPA.
 - Preflight-check Bundle ID, profile prefix, platform, expiry, certificate fingerprint/private-key availability and (when a verified device UDID is available) device authorization.
+- Detect nested `.appex` and Watch app bundles, read each Bundle ID, and allow selecting up to 10 provisioning profiles in one selection. Preflight maps profiles to the main app and nested bundles by `application-identifier`, validates each selected profile against the P12 certificate and target UDID, rejects missing/ambiguous/unused profiles, and passes the resolved profiles to zsign using repeated `-m` arguments. This is compatibility checking, not full Apple CMS trust-chain verification; validate resulting IPAs on a real iPhone.
 - Inspect Apple provisioning-profile metadata and public X.509 certificates.
 - Edit Swift, plist and entitlements text files in a lightweight source workspace. This is not a full Xcode replacement.
 - Discover Apple USB devices, request Android USB Host permission, monitor usbmux attach/detach events, and perform the ordinary Lockdown Pair exchange.
@@ -18,17 +20,29 @@ Bo Sideload is an Android app for inspecting IPA packages and re-signing them lo
 ## Signing and installation requirements
 
 - Supply a valid P12 certificate/private key and provisioning profile that authorize the app's Bundle ID, entitlements, signing identity and target device.
-- A free Apple Account / Personal Team has Apple's own limits and expiry rules. Bo Sideload does not create Apple-issued certificates or profiles, authenticate to Apple, bypass signing rules, or remove Apple's device authorization requirements.
+- A free Apple Account / Personal Team has Apple's own limits and expiry rules. Bo Sideload does not bypass signing rules or remove Apple's device authorization requirements. The current in-app Apple automation uses the official App Store Connect Team API and requires a paid Apple Developer Program membership plus a Team API key; it is not an Apple ID/password sign-in flow.
 - A successful zsign operation means an output IPA was generated; it does not guarantee that iOS will accept or launch it.
 - USB installation requires a compatible OTG/data cable, Android USB permission, an unlocked iPhone, an accepted Apple trust/pairing record, and a profile that authorizes the target device.
 - The USB pairing and installation implementation is present in the app, but it has **not yet been validated end-to-end on a physical Android + iPhone combination**. GitHub Actions success proves compilation and automated tests only; it does not prove real-device USB compatibility or successful installation. Treat the feature as experimental until that test is completed.
-- Wi-Fi pairing/installation is not implemented.
+- Discover Apple Wi-Fi Sync Bonjour/mDNS advertisements and compare the short `authTag` against locally stored Lockdown `HostID` values. A match identifies a candidate only; it is **not device authentication**.
+- For a previously paired device advertising legacy Wi-Fi Sync, let the user initiate Lockdown `StartSession` over the resolved Bonjour endpoint and authenticate TLS against the stored, pinned `DeviceCertificate`. The session is closed with the activity lifecycle. This compatibility path is not RemotePairing.
+- Wi-Fi now includes Bonjour discovery, authTag candidate matching, user-triggered Lockdown TLS authentication, a Wi-Fi IPA-install button, reusable TCP service connections, paired service-TLS handling, and an AFC → Installation Proxy coordinator. The button uses the already-selected signed IPA. This source path has passed Android CI but has **not** been validated end-to-end on physical iPhone hardware; treat Wi-Fi installation as experimental until that test succeeds.
+- CoreDevice RemotePairing/RSD remains separate and is not implemented.
 - Supported native signing-engine ABIs: `arm64-v8a` and `armeabi-v7a`.
+
+## Apple account and certificate automation
+
+- The **Apple ID** button opens Apple's official account website in the browser. Bo Sideload never asks for or stores an Apple ID password or 2FA code.
+- The in-app **Apple Developer • Team API** screen is a separate integration. It accepts a Team API key file (`.p8`), Key ID and Issuer ID, stores the key material encrypted with Android Keystore, and validates API access with Apple.
+- Apple Developer certificate, device registration and provisioning-profile operations require an eligible paid Apple Developer Program team and a Team API key with the required access to Certificates, Identifiers & Profiles. An Individual API key is not sufficient for these provisioning endpoints.
+- A free Apple Account / Personal Team does not provide this Team API automation. Apple's normal free Personal Team provisioning workflow requires Apple's supported Xcode/macOS workflow; this Android app does not claim to create free Personal Team certificates or profiles automatically.
+- Never enter an Apple ID password or 2FA code into the Team API screen. Treat the `.p8` key like a password; Apple only lets you download it once. Revoke it in Apple's account portal if it is lost or exposed.
+- Creating certificates, registering devices and creating profiles changes real Apple Developer account resources. The app asks for a separate confirmation before those operations. Check team limits and resource IDs before confirming.
 
 ## Important security boundaries
 
 - The app does not bypass the iPhone's trust prompt or provisioning restrictions.
-- Pairing private material is stored only in the encrypted local pairing record; P12 passwords are not stored in history or preferences.
+- Pairing private material is stored only in the encrypted local pairing record; P12 passwords are not stored in history or preferences or passed in zsign process arguments. The signing adapter briefly writes an unencrypted private-key PEM to app-private cache storage because upstream zsign v1.1.3 has no documented environment/stdin password channel; the file is removed after the operation. Android app sandboxing protects it from other ordinary apps, but this is still temporary plaintext key material and is not equivalent to hardware-backed signing.
 - Provisioning-profile preflight is a compatibility check, not a complete Apple CMS trust-chain or revocation validation.
 - Do not share diagnostic reports or pairing files publicly; diagnostic reports should not contain private keys, but can include device identifiers.
 - The Swift workspace is a lightweight text editor. Android does not include Apple's proprietary Xcode, iOS SDK or macOS build environment, so this app cannot compile a full native iOS project into an IPA.

@@ -8,7 +8,7 @@ class LockdownResponseParserTest {
     @Test fun parsesQueryTypeValue() {
         val bytes = LockdownPlistCodec.encode(mapOf(
             "Request" to "QueryType",
-            "Value" to "com.apple.mobile.lockdown"
+            "Type" to "com.apple.mobile.lockdown"
         ))
         val result = LockdownResponseParser.parse(bytes) as LockdownResponseParser.Response.Success
         assertEquals("QueryType", result.request)

@@ -35,7 +35,12 @@ internal class EncryptedPairRecordStore(context: Context) {
             .put(cipher.iv)
             .put(encrypted)
             .array()
-        check(preferences.edit().putString(prefKey(record.deviceId), Base64.encodeToString(blob, Base64.NO_WRAP)).commit()) {
+        val indexedIds = preferences.getStringSet(INDEX_KEY, emptySet()).orEmpty().toMutableSet()
+        indexedIds.add(record.deviceId)
+        check(preferences.edit()
+            .putString(prefKey(record.deviceId), Base64.encodeToString(blob, Base64.NO_WRAP))
+            .putStringSet(INDEX_KEY, indexedIds)
+            .commit()) {
             "could not persist encrypted pairing record"
         }
     }
@@ -62,9 +67,18 @@ internal class EncryptedPairRecordStore(context: Context) {
     }
 
     @Synchronized
+    fun listDeviceIds(): List<String> =
+        preferences.getStringSet(INDEX_KEY, emptySet()).orEmpty().toList().sorted()
+
+    @Synchronized
     fun delete(deviceId: String) {
         require(deviceId.isNotBlank()) { "device ID must not be blank" }
-        preferences.edit().remove(prefKey(deviceId)).commit()
+        val indexedIds = preferences.getStringSet(INDEX_KEY, emptySet()).orEmpty().toMutableSet()
+        indexedIds.remove(deviceId)
+        check(preferences.edit()
+            .remove(prefKey(deviceId))
+            .putStringSet(INDEX_KEY, indexedIds)
+            .commit()) { "could not delete pairing record" }
         val store = keyStore()
         store.deleteEntry(keyAlias(deviceId))
     }
@@ -108,6 +122,7 @@ internal class EncryptedPairRecordStore(context: Context) {
         const val PREFS_NAME = "bo_sideload_encrypted_pair_records"
         const val KEY_PREFIX = "bo_pair_"
         const val RECORD_PREFIX = "record_"
+        const val INDEX_KEY = "paired_device_ids"
         const val GCM_IV_BYTES = 12
         const val GCM_TAG_BITS = 128
         const val GCM_TAG_BYTES = GCM_TAG_BITS / 8

@@ -20,8 +20,9 @@ import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter
 /**
  * TLS upgrade for a Lockdown StartService endpoint.
  *
- * Apple service TLS uses the paired RootCertificate/RootPrivateKey as the
- * client identity. The peer certificate is pinned to the paired device cert.
+ * Apple service TLS presents the paired RootCertificate/RootPrivateKey as
+ * the client identity (matching libimobiledevice's Lockdown TLS implementation).
+ * The peer certificate is pinned to the paired DeviceCertificate.
  * This performs TLS directly on the newly connected service stream; it does
  * not send a second Lockdown StartSession request.
  */
@@ -36,17 +37,26 @@ internal class PairedServiceTlsSocket private constructor(
     companion object {
         @Throws(IOException::class)
         fun upgrade(connectSession: UsbMuxConnectSession, record: PairRecord): PairedServiceTlsSocket {
-            record.validate()
             val transportSocket = StreamBackedSocket(
                 connectSession.inputStream,
                 connectSession.outputStream
             ) { connectSession.close() }
+            return upgrade(transportSocket, record)
+        }
+
+        /**
+         * Upgrades an already-connected TCP service socket. Used by legacy
+         * Apple Wi-Fi Sync after Lockdown StartService returns its service port.
+         */
+        @Throws(IOException::class)
+        fun upgrade(transportSocket: Socket, record: PairRecord): PairedServiceTlsSocket {
+            record.validate()
             try {
                 val context = createContext(record)
                 val ssl = context.socketFactory.createSocket(
                     transportSocket,
                     "paired-apple-service",
-                    0,
+                    transportSocket.port,
                     true
                 ) as SSLSocket
                 ssl.useClientMode = true
@@ -60,11 +70,25 @@ internal class PairedServiceTlsSocket private constructor(
 
         private fun createContext(record: PairRecord): SSLContext {
             val rootCertificate = parseCertificate(record.rootCertificate)
+            val hostCertificate = parseCertificate(record.hostCertificate)
             val deviceCertificate = parseCertificate(record.deviceCertificate)
+            // Present the paired host identity to the Apple service. The root
+            // certificate is the issuer, not the client identity.
+            validatePairedServiceCertificates(rootCertificate, hostCertificate, deviceCertificate)
+            val hostPrivateKey = parsePrivateKey(record.hostKeyMaterial)
+            verifyPairedHostPrivateKeyMatchesCertificate(hostPrivateKey, hostCertificate)
             val rootPrivateKey = parsePrivateKey(record.rootKeyMaterial)
+            verifyPairedRootPrivateKeyMatchesCertificate(rootPrivateKey, rootCertificate)
             val identity = KeyStore.getInstance(KeyStore.getDefaultType()).apply {
                 load(null)
-                setKeyEntry("bo-service-root", rootPrivateKey, CharArray(0), arrayOf(rootCertificate))
+                // libimobiledevice's OpenSSL backend uses the paired RootCertificate
+                // and RootPrivateKey as the Apple TLS client identity.
+                setKeyEntry(
+                    "bo-service-root",
+                    rootPrivateKey,
+                    CharArray(0),
+                    arrayOf(rootCertificate)
+                )
             }
             val keyManagers = KeyManagerFactory.getInstance(
                 KeyManagerFactory.getDefaultAlgorithm()
@@ -78,11 +102,7 @@ internal class PairedServiceTlsSocket private constructor(
                     if (chain.isNullOrEmpty()) {
                         throw java.security.cert.CertificateException("service supplied no peer certificate")
                     }
-                    val expected = fingerprint(deviceCertificate)
-                    if (chain.none { fingerprint(it) == expected }) {
-                        throw java.security.cert.CertificateException("service certificate does not match paired iPhone")
-                    }
-                    deviceCertificate.checkValidity()
+                    verifyPinnedServicePeerCertificate(chain, deviceCertificate)
                 }
             }
             return SSLContext.getInstance("TLS").apply {
@@ -100,12 +120,12 @@ internal class PairedServiceTlsSocket private constructor(
             require(bytes.isNotEmpty() && bytes.size <= PairRecordCodec.MAX_FIELD_BYTES)
             PEMParser(StringReader(String(bytes, Charsets.US_ASCII))).use { parser ->
                 val value = parser.readObject()
-                    ?: throw IllegalArgumentException("paired root private key is empty")
+                    ?: throw IllegalArgumentException("paired private key is empty")
                 val converter = JcaPEMKeyConverter()
                 return when (value) {
                     is org.bouncycastle.openssl.PEMKeyPair -> converter.getKeyPair(value).private
                     is org.bouncycastle.asn1.pkcs.PrivateKeyInfo -> converter.getPrivateKey(value)
-                    else -> throw IllegalArgumentException("unsupported paired root private key PEM")
+                    else -> throw IllegalArgumentException("unsupported paired private key PEM")
                 }
             }
         }
@@ -172,4 +192,130 @@ internal class AfcServiceConnection private constructor(
             }
         }
     }
+}
+
+/**
+ * Confirms that the saved host private key belongs to the paired HostCertificate.
+ * Kept internal so the cryptographic check can be covered by local unit tests.
+ */
+@Throws(IOException::class)
+internal fun verifyPairedHostPrivateKeyMatchesCertificate(
+    privateKey: PrivateKey,
+    certificate: X509Certificate
+) {
+    try {
+        val challenge = ByteArray(32).also { java.security.SecureRandom().nextBytes(it) }
+        val signer = java.security.Signature.getInstance("SHA256withRSA")
+        signer.initSign(privateKey)
+        signer.update(challenge)
+        val signed = signer.sign()
+
+        val verifier = java.security.Signature.getInstance("SHA256withRSA")
+        verifier.initVerify(certificate.publicKey)
+        verifier.update(challenge)
+        if (!verifier.verify(signed)) {
+            throw IOException("Paired host private key does not match HostCertificate")
+        }
+    } catch (error: IOException) {
+        throw error
+    } catch (error: Exception) {
+        throw IOException("Could not validate the paired host key and certificate", error)
+    }
+}
+
+/**
+ * Confirms that the saved pairing root private key belongs to RootCertificate.
+ */
+@Throws(IOException::class)
+internal fun verifyPairedRootPrivateKeyMatchesCertificate(
+    privateKey: PrivateKey,
+    certificate: X509Certificate
+) {
+    try {
+        val challenge = ByteArray(32).also { java.security.SecureRandom().nextBytes(it) }
+        val signer = java.security.Signature.getInstance("SHA256withRSA")
+        signer.initSign(privateKey)
+        signer.update(challenge)
+        val signed = signer.sign()
+
+        val verifier = java.security.Signature.getInstance("SHA256withRSA")
+        verifier.initVerify(certificate.publicKey)
+        verifier.update(challenge)
+        if (!verifier.verify(signed)) {
+            throw IOException("Paired root private key does not match RootCertificate")
+        }
+    } catch (error: IOException) {
+        throw error
+    } catch (error: Exception) {
+        throw IOException("Could not validate the paired root key and certificate", error)
+    }
+}
+
+/**
+ * Validates the saved Apple pairing certificate chain before TLS is started.
+ */
+@Throws(IOException::class)
+internal fun validatePairedServiceCertificates(
+    rootCertificate: X509Certificate,
+    hostCertificate: X509Certificate,
+    deviceCertificate: X509Certificate
+) {
+    try {
+        if (rootCertificate.subjectX500Principal != rootCertificate.issuerX500Principal) {
+            throw IOException("saved root certificate is not self-issued")
+        }
+        if (hostCertificate.issuerX500Principal != rootCertificate.subjectX500Principal) {
+            throw IOException("HostCertificate issuer does not match the saved root")
+        }
+        if (deviceCertificate.issuerX500Principal != rootCertificate.subjectX500Principal) {
+            throw IOException("DeviceCertificate issuer does not match the saved root")
+        }
+        if (rootCertificate.basicConstraints < 0) {
+            throw IOException("saved root certificate is not marked as a certificate authority")
+        }
+        if (rootCertificate.keyUsage?.getOrNull(5) != true) {
+            throw IOException("saved root certificate must allow certificate signing")
+        }
+        if (hostCertificate.basicConstraints >= 0 || deviceCertificate.basicConstraints >= 0) {
+            throw IOException("paired host and device certificates must not be certificate authorities")
+        }
+        if (hostCertificate.keyUsage?.getOrNull(0) != true ||
+            deviceCertificate.keyUsage?.getOrNull(0) != true
+        ) {
+            throw IOException("paired host and device certificates must allow digital signatures")
+        }
+        rootCertificate.verify(rootCertificate.publicKey)
+        hostCertificate.verify(rootCertificate.publicKey)
+        deviceCertificate.verify(rootCertificate.publicKey)
+        rootCertificate.checkValidity()
+        hostCertificate.checkValidity()
+        deviceCertificate.checkValidity()
+    } catch (error: Exception) {
+        throw IOException("Pair record certificates are not valid under the saved root certificate", error)
+    }
+}
+
+
+/**
+ * Pins the TLS peer leaf to the exact DeviceCertificate saved during pairing.
+ * A matching certificate elsewhere in the chain is not sufficient: otherwise
+ * an untrusted leaf could be accepted merely by including the pinned cert as
+ * an issuer or unrelated chain element.
+ */
+@Throws(java.security.cert.CertificateException::class)
+internal fun verifyPinnedServicePeerCertificate(
+    chain: Array<out X509Certificate>,
+    expectedDeviceCertificate: X509Certificate
+) {
+    if (chain.isEmpty()) {
+        throw java.security.cert.CertificateException("service supplied no peer certificate")
+    }
+    val actualLeaf = MessageDigest.getInstance("SHA-256").digest(chain[0].encoded)
+    val expectedLeaf = MessageDigest.getInstance("SHA-256").digest(expectedDeviceCertificate.encoded)
+    if (!MessageDigest.isEqual(actualLeaf, expectedLeaf)) {
+        throw java.security.cert.CertificateException(
+            "service leaf certificate does not match paired iPhone DeviceCertificate"
+        )
+    }
+    expectedDeviceCertificate.checkValidity()
 }

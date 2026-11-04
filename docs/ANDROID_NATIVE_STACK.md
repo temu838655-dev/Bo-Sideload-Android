@@ -1,69 +1,73 @@
-# Android native Apple-device transport implementation plan
+# Android Apple-device transport: current implementation and remaining work
 
-This document is the engineering gate for adding real iPhone/iPad communication. It is intentionally separate from the existing zsign IPA re-signing flow.
+## Current Kotlin implementation
 
-## Architecture
+The app keeps its Android UI and USB ownership in Kotlin. The following pieces are present in the repository:
 
-Keep the Android UI in Kotlin. Put the device protocol behind a small JNI boundary so that USB permission, Android lifecycle, cancellation, and progress remain controlled by the app.
+- Android USB Host discovery, permission requests and endpoint diagnostics.
+- USB usbmux Listen/Connect framing and device attach/detach handling.
+- Ordinary Apple Lockdown QueryType/GetValue/Pair exchange.
+- Encrypted pairing-record storage backed by Android Keystore AES-256-GCM.
+- Lockdown TLS service sessions with paired-host identity validation.
+- AFC staging and Installation Proxy install orchestration for an already-signed IPA.
+- Bonjour/mDNS discovery of the legacy Apple Wi-Fi Sync service `_apple-mobdev2._tcp.`.
+
+The Wi-Fi discovery component treats Bonjour records as untrusted hints. It compares the advertised authentication tag with locally stored Lockdown HostID values, then requires a user-initiated Lockdown StartSession and TLS peer-certificate pinning before enabling the Wi-Fi install path. This legacy Wi-Fi Sync path is experimental and has not been validated on physical hardware.
+
+## Current transport boundary
 
 ```text
 Kotlin DeviceConnectionActivity
-  -> Android USB Host transport (UsbManager / UsbDeviceConnection)
-  -> native transport adapter (JNI; no root; no shelling out)
-  -> usbmux protocol
-  -> Lockdown pairing and session
-  -> service connection (InstallationProxy)
-  -> install / query / verify app
+  |-- USB Host -> usbmux -> Lockdown -> TLS -> AFC -> Installation Proxy
+  |
+  |-- Wi-Fi NSD/mDNS -> authTag candidate match -> Lockdown TLS pinning
+                         -> AFC -> Installation Proxy (experimental)
 ```
 
-The Android USB Host layer must own the already-authorized `UsbDeviceConnection`. Do not assume a desktop `usbmuxd` daemon can open Android USB devices itself: adapt its transport so it reads/writes through the Android-owned connection, or use a clearly isolated native bridge with the same ownership model.
+The current USB path is implemented in Kotlin rather than delegated to a desktop `usbmuxd` process. Android's `UsbDeviceConnection` remains owned by the app. Do not introduce a desktop daemon assumption that cannot access Android USB Host handles.
 
-## Dependency order
+## IPA signing scope
 
-1. Pin source revisions and record license + NOTICE files for every dependency.
-2. Cross-compile required libraries for each shipped ABI with a pinned Android NDK and CMake toolchain.
-3. Build and test plist parsing and usbmux framing independently of physical devices.
-4. Implement USB bulk/control transfers using Android USB Host endpoints and explicit timeouts/cancellation.
-5. Implement usbmux connection negotiation and validate framing against captured, non-secret test fixtures.
-6. Implement Lockdown pairing using Apple's normal user trust flow. Store pairing records only in app-private storage; never log pairing secrets or private keys.
-7. Start InstallationProxy only after a trusted session exists.
-8. Install a valid, already-signed test IPA; query the installed bundle identifier and version to verify success.
+- The signing UI accepts one P12 identity and multiple provisioning profiles for a single IPA.
+- Preflight reads the main app and nested `.appex` / Watch bundle `Info.plist` files, then maps the selected profiles to bundle identifiers through each profile's `Entitlements.application-identifier`.
+- Each resolved assignment is checked for application-identifier/prefix compatibility, iOS platform, expiration, P12 certificate fingerprint/private-key availability, and target-device authorization when a verified UDID is available.
+- Missing, ambiguous, and unused profile selections are rejected. The resolved profile order is passed to zsign using repeated `-m` arguments.
+- This is a compatibility preflight, not full Apple CMS trust-chain verification or complete post-sign validation of every nested code signature. A successful zsign run does not guarantee that iOS will install or launch the IPA; validate on a real iPhone.
 
-## ABI and build requirements
+## Wi-Fi implementation sequence
 
-- Initial target ABIs: `arm64-v8a` and `armeabi-v7a`, matching the current zsign packaging.
-- Use Android NDK + CMake; do not package host Linux/macOS binaries.
-- Keep native libraries under `app/src/main/jniLibs/<abi>/`.
-- Add a reproducible CI job that builds from pinned source revisions, checks ELF machine/ABI, runs native unit tests, and packages the APK.
-- Fail CI if a required ABI is missing. Keep debug symbols as CI artifacts for diagnosing native crashes.
+1. (Done) Discover `_apple-mobdev2._tcp.` services using Android NSD and hold a Wi-Fi multicast lock only while scanning.
+2. (Implemented; physical test pending) Match a discovered service to a locally stored pairing record, validate its advertised authentication tag, and require user-initiated Lockdown TLS authentication with the saved DeviceCertificate pinned.
+3. (Implemented; physical test pending) Reuse authenticated Wi-Fi TCP service connections for AFC staging and Installation Proxy installation.
+4. Add iOS 27+ device-initiated Remote Pairing host advertisement and PIN handoff using a reviewed, pinned protocol implementation.
+5. Establish the authenticated RemotePairing TLS-PSK tunnel, software TCP tunnel and Remote Service Discovery (RSD) session.
+6. Add cancellation, bounded parsing, timeout handling, integration tests and physical-device validation.
 
-## Security requirements
+Do not connect to a discovered IP address merely because its TCP port is open. Do not treat Lockdown TCP port 62078 as a general-purpose first-pairing interface. Remote Pairing and ordinary Lockdown pairing are distinct protocols and must not be conflated.
 
-- Never bypass the iPhone/iPad trust prompt or reuse pairing records from another device.
-- Never print pairing records, escrow keys, P12 passwords, private keys, or full provisioning profile contents in logs.
-- Validate all device-provided plist/XML/binary-plist data and impose size/time limits.
-- Treat USB vendor/product IDs and interface descriptors as hints, not proof of an Apple device.
-- Do not enable an install button until pairing, install, and post-install verification pass on a physical device.
+## Build and release requirements
 
-## Licensing gate
-
-Before adding a dependency to the APK, pin its exact revision and review the license of the dependency and every transitive component. The current research notes that the candidate installer stack includes GPL components; distribution obligations must be resolved before shipping. Preserve required license texts and source-offer/notice materials.
+- Keep native libraries, if introduced, pinned by exact version/revision and reviewed for license compatibility.
+- Build every shipped Android ABI with a pinned NDK toolchain; verify ELF machine types before packaging.
+- Keep pairing secrets, private keys, escrow material and P12 passwords out of logs.
+- Keep all pairing records encrypted at rest with Android Keystore-backed keys.
+- CI compilation and unit tests do not prove interoperability with a physical iPhone.
 
 ## Physical-device acceptance matrix
 
 | Test | Required result |
 |---|---|
-| No device attached | Clear empty state; no crash |
-| Non-Apple USB device | Diagnostics only; no Apple protocol claim |
-| Apple device, permission denied | Clear denial; no protocol traffic |
-| Apple device, permission granted but locked | Explain unlock/trust requirement |
-| User rejects Trust prompt | Pairing fails safely; retry is possible |
-| User accepts Trust prompt | Lockdown session established |
-| Signed test IPA with matching profile | InstallationProxy reports success |
-| Post-install query | Expected bundle ID/version is present |
-| Cable removed during transfer | Cancel/cleanup; actionable error; no false success |
-| Unsupported ABI / native library missing | Feature remains unavailable; app does not crash |
+| No USB device | Clear empty state; no crash |
+| USB permission denied | No protocol traffic; clear denial |
+| USB pairing rejected | Safe failure and retry |
+| USB pairing accepted | Pair record encrypted and Lockdown TLS identity verified |
+| Signed test IPA | Installation Proxy success and post-install bundle/version verification |
+| Wi-Fi Sync service found | Candidate displayed as untrusted; no automatic socket connection |
+| Spoofed mDNS service | Rejected by pairing-record authentication before connecting |
+| iOS Remote Pairing | PIN exchange and authenticated tunnel verified on supported real devices |
+| Wi-Fi install | IPA transfer, installation and post-install verification succeed on a real device |
+| Network loss | Cancel and clean up without false success |
 
 ## Current status
 
-The APK currently implements USB discovery, Android USB permission prompts, endpoint diagnostics, and shareable reports. It does **not** yet implement the native transport adapter, usbmux, Lockdown pairing, InstallationProxy, or direct IPA installation. A successful Android APK build is not evidence that iPhone installation works.
+USB pairing and the USB IPA installation pipeline are wired in the app but still require end-to-end validation on physical Android/iPhone hardware. Legacy Wi-Fi Sync Bonjour discovery, authTag candidate matching, user-triggered Lockdown TLS pinning, Wi-Fi service connections, AFC staging and Installation Proxy orchestration are implemented in source but remain experimental until physical-device acceptance tests pass. CoreDevice RemotePairing/RSD is not implemented. IPA signing preflight supports multiple provisioning profiles and maps them to the main app and detected nested .appex / Watch bundles. Post-sign structural inspection verifies the main app and detected nested `.appex` / Watch `.app` executables, their `CodeResources`, embedded profiles, and the supported primary CodeDirectory hash slots. It still does not cryptographically validate every sealed resource, alternate CodeDirectory, CMS signature, certificate chain, or Apple's full trust policy. Real-device acceptance remains outstanding.

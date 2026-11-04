@@ -2,4 +2,5 @@
 <full-backup-content>
     <!-- The Android Keystore key is device-bound; never back up its ciphertext alone. -->
     <exclude domain="sharedpref" path="bo_sideload_encrypted_pair_records.xml" />
+    <exclude domain="sharedpref" path="apple_connect_credentials.xml" />
 </full-backup-content>

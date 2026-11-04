@@ -111,20 +111,34 @@ internal class LockdownTlsSession private constructor(
         }
 
         private fun createSslContext(record: PairRecord): SSLContext {
-            // Lockdown StartSession authenticates this host with the paired
-            // HostCertificate/HostPrivateKey. The Root identity is reserved
-            // for service TLS handshakes (AFC / installation_proxy).
+            // Match libimobiledevice's OpenSSL Lockdown handshake: present
+            // the paired RootCertificate + RootPrivateKey as the TLS client
+            // identity. The Host identity is retained and validated in the
+            // pairing record for the ordinary Lockdown Pair protocol.
+            val rootCertificate = parseCertificate(record.rootCertificate)
             val hostCertificate = parseCertificate(record.hostCertificate)
             val deviceCertificate = parseCertificate(record.deviceCertificate)
             val hostPrivateKey = parsePrivateKey(record.hostKeyMaterial)
+            val rootPrivateKey = parsePrivateKey(record.rootKeyMaterial)
+
+            // Validate both generated key pairs before StartSession TLS.
+            validatePairedServiceCertificates(
+                rootCertificate,
+                hostCertificate,
+                deviceCertificate
+            )
+            verifyPairedHostPrivateKeyMatchesCertificate(hostPrivateKey, hostCertificate)
+            verifyPairedRootPrivateKeyMatchesCertificate(rootPrivateKey, rootCertificate)
 
             val identityStore = KeyStore.getInstance(KeyStore.getDefaultType()).apply {
                 load(null)
+                // Match the widely used libimobiledevice OpenSSL Lockdown
+                // handshake: RootCertificate + RootPrivateKey are the TLS identity.
                 setKeyEntry(
-                    "bo-lockdown-host",
-                    hostPrivateKey,
+                    "bo-lockdown-root",
+                    rootPrivateKey,
                     CharArray(0),
-                    arrayOf(hostCertificate)
+                    arrayOf(rootCertificate)
                 )
             }
             val keyManagers = KeyManagerFactory.getInstance(

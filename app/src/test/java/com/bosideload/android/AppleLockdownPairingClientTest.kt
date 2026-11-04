@@ -29,6 +29,7 @@ class AppleLockdownPairingClientTest {
     fun readsDevicePublicKeyPairsAndPersistsOnlyAfterPairSuccess() {
         val escrow = byteArrayOf(4, 5, 6)
         val input = ByteArrayInputStream(
+            response(mapOf("Request" to "QueryType", "Type" to "com.apple.mobile.lockdown")) +
             response(mapOf("Request" to "GetValue", "Value" to "00008030-001C195E0E91802E")) +
                 response(mapOf("Request" to "GetValue", "Value" to publicKeyPem())) +
                 response(mapOf("Request" to "Pair", "EscrowBag" to escrow))
@@ -49,12 +50,13 @@ class AppleLockdownPairingClientTest {
         assertEquals("AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE", record.hostId)
         assertArrayEquals(escrow, record.escrowBag)
         assertArrayEquals(record.hostKeyMaterial, persisted!!.hostKeyMaterial)
-        assertEquals(3, countLockdownRequests(output.toByteArray()))
+        assertEquals(4, countLockdownRequests(output.toByteArray()))
     }
 
     @Test
     fun doesNotPersistWhenDeviceRejectsDevicePublicKeyRequest() {
         val input = ByteArrayInputStream(
+            response(mapOf("Request" to "QueryType", "Type" to "com.apple.mobile.lockdown")) +
             response(mapOf("Request" to "GetValue", "Error" to "InvalidRequest"))
         )
         var persisted = false
@@ -74,6 +76,7 @@ class AppleLockdownPairingClientTest {
     @Test
     fun doesNotPersistWhenDeviceRejectsPairRequest() {
         val input = ByteArrayInputStream(
+            response(mapOf("Request" to "QueryType", "Type" to "com.apple.mobile.lockdown")) +
             response(mapOf("Request" to "GetValue", "Value" to "00008030-001C195E0E91802E")) +
                 response(mapOf("Request" to "GetValue", "Value" to publicKeyPem())) +
                 response(mapOf("Request" to "Pair", "Error" to "PairingProhibited"))
@@ -96,6 +99,7 @@ class AppleLockdownPairingClientTest {
     @Test
     fun rejectsUsbSerialThatDoesNotMatchLockdownUdid() {
         val input = ByteArrayInputStream(
+            response(mapOf("Request" to "QueryType", "Type" to "com.apple.mobile.lockdown")) +
             response(mapOf("Request" to "GetValue", "Value" to "DIFFERENT-UDID-000"))
         )
         var persisted = false
@@ -111,6 +115,25 @@ class AppleLockdownPairingClientTest {
             )
         }
         assertEquals(false, persisted)
+        assertEquals(2, countLockdownRequests(output.toByteArray()))
+    }
+
+    @Test
+    fun rejectsNonLockdownServiceBeforeReadingDeviceIdentity() {
+        val input = ByteArrayInputStream(
+            response(mapOf("Request" to "QueryType", "Type" to "com.apple.mobile.installation_proxy"))
+        )
+        val output = ByteArrayOutputStream()
+        val client = AppleLockdownPairingClient { }
+
+        assertThrows(IOException::class.java) {
+            client.pair(
+                LockdownSessionChannel(input, output),
+                "00008030-001C195E0E91802E",
+                "11111111-2222-3333-4444-555555555555",
+                "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE"
+            )
+        }
         assertEquals(1, countLockdownRequests(output.toByteArray()))
     }
 

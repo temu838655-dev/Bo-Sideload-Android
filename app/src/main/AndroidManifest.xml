@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
     <application
         android:allowBackup="true"
@@ -7,6 +11,9 @@
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:label="Bo Sideload"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        <activity
+            android:name=".AppleConnectActivity"
+            android:exported="false" />
         <activity
             android:name=".AppleSigningGuideActivity"
             android:exported="false" />

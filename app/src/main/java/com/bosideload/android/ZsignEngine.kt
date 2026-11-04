@@ -23,6 +23,14 @@ internal class ZsignEngine(private val context: Context) {
         provisioningProfile: File,
         password: String,
         outputIpa: File
+    ): SignResult = sign(inputIpa, p12File, listOf(provisioningProfile), password, outputIpa)
+
+    fun sign(
+        inputIpa: File,
+        p12File: File,
+        provisioningProfiles: List<File>,
+        password: String,
+        outputIpa: File
     ): SignResult {
         if (!inputIpa.isFile || inputIpa.length() == 0L) {
             return SignResult(false, null, "Không tìm thấy IPA đầu vào hoặc tệp rỗng.")
@@ -30,24 +38,21 @@ internal class ZsignEngine(private val context: Context) {
         if (!p12File.isFile || p12File.length() == 0L) {
             return SignResult(false, null, "Tệp chứng chỉ P12 không hợp lệ.")
         }
-        if (!provisioningProfile.isFile || provisioningProfile.length() == 0L) {
-            return SignResult(false, null, "Tệp provisioning profile không hợp lệ.")
+        if (provisioningProfiles.isEmpty() || provisioningProfiles.any { !it.isFile || it.length() == 0L }) {
+            return SignResult(false, null, "Danh sách provisioning profile rỗng hoặc có tệp không hợp lệ.")
         }
 
         return try {
             val binary = installEngine()
-            outputIpa.parentFile?.mkdirs()
-            outputIpa.delete()
-            val command = mutableListOf(
-                binary.absolutePath,
-                "-f",
-                "-k", p12File.absolutePath,
-                "-p", password,
-                "-m", provisioningProfile.absolutePath,
-                "-o", outputIpa.absolutePath,
-                inputIpa.absolutePath
-            )
-            val process = ProcessBuilder(command)
+            val identity = AppleP12PemExporter.export(context, p12File, password)
+            try {
+                outputIpa.parentFile?.mkdirs()
+                outputIpa.delete()
+                val command = buildSigningCommand(
+                    binary, inputIpa, identity.privateKeyFile, identity.certificateFile,
+                    provisioningProfiles, outputIpa
+                )
+                val process = ProcessBuilder(command)
                 .directory(context.cacheDir)
                 .redirectErrorStream(true)
                 .start()
@@ -80,28 +85,106 @@ internal class ZsignEngine(private val context: Context) {
 
             if (exitCode == 0 && outputExists) {
                 val verification = SignedIpaVerifier.verify(inputIpa, outputIpa)
-                if (verification.valid) {
-                    SignResult(
-                        true,
-                        outputIpa,
-                        "zsign đã tạo IPA và kiểm tra cấu trúc đầu ra đạt. ${verification.message}\n$details"
-                    )
-                } else {
+                if (!verification.valid) {
                     outputIpa.delete()
                     SignResult(
                         false,
                         null,
-                        "zsign trả mã thành công nhưng IPA đầu ra không vượt qua kiểm tra hậu ký: ${verification.message}\n$details"
+                        "zsign trả mã thành công nhưng IPA đầu ra không vượt qua kiểm tra cấu trúc: ${verification.message}\\n$details"
                     )
+                } else {
+                    val certificateCheck = checkSignedCertificate(binary, outputIpa)
+                    if (!certificateCheck.valid) {
+                        outputIpa.delete()
+                        SignResult(
+                            false,
+                            null,
+                            "IPA được tạo nhưng kiểm tra certificate/OCSP không đạt: ${certificateCheck.message}\\n$details"
+                        )
+                    } else {
+                        SignResult(
+                            true,
+                            outputIpa,
+                            "IPA đã vượt qua kiểm tra cấu trúc. ${verification.message}\\n" +
+                                "KIỂM TRA CERTIFICATE: ${certificateCheck.message}\\n$details"
+                        )
+                    }
                 }
-            } else {
-                outputIpa.delete()
-                SignResult(false, null, "zsign không ký được IPA (mã thoát $exitCode).\n$details")
+                } else {
+                    outputIpa.delete()
+                    SignResult(false, null, "zsign không ký được IPA (mã thoát $exitCode).\n$details")
+                }
+            } finally {
+                identity.cleanup()
             }
         } catch (error: Exception) {
             outputIpa.delete()
             SignResult(false, null, "Không chạy được bộ ký trên thiết bị này: ${error.message ?: "lỗi không xác định"}")
         }
+    }
+
+    private data class CertificateCheck(val valid: Boolean, val message: String)
+
+    /**
+     * Ask zsign's own certificate checker to inspect the signed IPA and query
+     * Apple's OCSP endpoint when network access is available. Structural
+     * verification remains separate and is not represented as CMS verification.
+     */
+    private fun checkSignedCertificate(binary: File, ipa: File): CertificateCheck {
+        val process = try {
+            ProcessBuilder(binary.absolutePath, "-C", ipa.absolutePath)
+                .directory(context.cacheDir)
+                .redirectErrorStream(true)
+                .start()
+        } catch (error: Exception) {
+            return CertificateCheck(false,
+                "Không khởi chạy được kiểm tra zsign -C: ${error.message ?: "lỗi"}")
+        }
+        val output = StringBuilder()
+        val reader = Thread {
+            process.inputStream.bufferedReader().useLines { lines ->
+                lines.forEach { line ->
+                    synchronized(output) {
+                        if (output.length < MAX_CERT_CHECK_LOG_CHARS) {
+                            output.append(line).append('\n')
+                        }
+                    }
+                }
+            }
+        }
+        reader.start()
+        val finished = try {
+            process.waitFor(CERT_CHECK_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        } catch (error: InterruptedException) {
+            Thread.currentThread().interrupt()
+            false
+        }
+        if (!finished) {
+            process.destroyForcibly()
+            runCatching { process.inputStream.close() }
+            runCatching { reader.join(1500) }
+            return CertificateCheck(false, "Kiểm tra certificate quá thời gian chờ.")
+        }
+        runCatching { reader.join(2000) }
+        val text = synchronized(output) { output.toString().trim() }
+        val signed = Regex("Signed\\s*:\\s*Yes", RegexOption.IGNORE_CASE).containsMatchIn(text)
+        val revoked = Regex("OCSP\\s*:\\s*Revoked", RegexOption.IGNORE_CASE).containsMatchIn(text)
+        val invalid = Regex("(certificate|cert)\\s*:\\s*(invalid|expired|revoked)", RegexOption.IGNORE_CASE)
+            .containsMatchIn(text)
+        if (process.exitValue() != 0 || !signed || revoked || invalid) {
+            return CertificateCheck(false,
+                "zsign -C không xác nhận certificate hợp lệ (exit ${process.exitValue()}).\n" +
+                    text.takeLast(2500))
+        }
+        val ocspValid = Regex("OCSP\\s*:\\s*Valid", RegexOption.IGNORE_CASE).containsMatchIn(text)
+        val ocspUnknown = Regex("OCSP\\s*:\\s*(unknown|unavailable|error|not checked)", RegexOption.IGNORE_CASE)
+            .containsMatchIn(text)
+        val note = when {
+            ocspValid -> "Certificate được zsign nhận diện và OCSP báo Valid."
+            ocspUnknown -> "Certificate được zsign nhận diện; OCSP chưa xác minh được."
+            else -> "Certificate được zsign nhận diện; không có kết quả OCSP rõ ràng."
+        }
+        return CertificateCheck(true, note + "\n" + text.takeLast(1800))
     }
 
     fun engineVersion(): String {
@@ -161,10 +244,34 @@ internal class ZsignEngine(private val context: Context) {
         return destination
     }
 
-    private companion object {
+    companion object {
         const val PROCESS_TIMEOUT_MINUTES = 10L
         const val MAX_LOG_CHARS = 32_000
         const val VERSION_TIMEOUT_SECONDS = 15L
         const val MAX_VERSION_OUTPUT_CHARS = 4_000
+        const val CERT_CHECK_TIMEOUT_SECONDS = 90L
+        const val MAX_CERT_CHECK_LOG_CHARS = 12_000
+        internal fun buildSigningCommand(
+                binary: File,
+                inputIpa: File,
+                privateKeyFile: File,
+                certificateFile: File,
+                provisioningProfiles: List<File>,
+                outputIpa: File
+            ): List<String> {
+                require(provisioningProfiles.isNotEmpty()) { "Cần ít nhất một provisioning profile." }
+                val command = mutableListOf(
+                    binary.absolutePath,
+                    "-f",
+                    "-k", privateKeyFile.absolutePath,
+                    "-c", certificateFile.absolutePath
+                )
+                provisioningProfiles.forEach { profile ->
+                    command += "-m"
+                    command += profile.absolutePath
+                }
+                command += listOf("-o", outputIpa.absolutePath, inputIpa.absolutePath)
+                return command
+            }
     }
 }

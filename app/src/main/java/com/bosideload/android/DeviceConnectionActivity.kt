@@ -19,8 +19,16 @@ import android.widget.TextView
 /** USB discovery and ordinary Apple Lockdown pairing. IPA installation is wired to this screen but still requires real-device validation. */
 class DeviceConnectionActivity : Activity() {
     private lateinit var usbManager: UsbManager
+    private lateinit var pairRecordStore: EncryptedPairRecordStore
     private lateinit var status: TextView
     private lateinit var devicesPanel: LinearLayout
+    private lateinit var wifiDevicesPanel: LinearLayout
+    private lateinit var wifiScanButton: Button
+    private var activeWifiDiscovery: WifiAppleDeviceDiscovery? = null
+    @Volatile private var activeWifiLockdownSession: LockdownTlsSession? = null
+    @Volatile private var activeWifiLockdownDeviceId: String? = null
+    @Volatile private var activeWifiServiceName: String? = null
+    private val wifiInstallButtonsByService = mutableMapOf<String, Button>()
     private lateinit var pairButton: Button
     private lateinit var installButton: Button
     private var attachedAppleDevice: UsbDevice? = null
@@ -61,6 +69,7 @@ class DeviceConnectionActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         usbManager = getSystemService(Context.USB_SERVICE) as UsbManager
+        pairRecordStore = EncryptedPairRecordStore(this)
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(24), dp(20), dp(24))
@@ -93,6 +102,203 @@ class DeviceConnectionActivity : Activity() {
         })
         devicesPanel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(devicesPanel)
+        root.addView(TextView(this).apply {
+            text = "WI-FI LÀ CHẾ ĐỘ ƯU TIÊN"
+            textSize = 16f
+            setTextColor(-1)
+            setPadding(0, dp(20), 0, dp(6))
+        })
+        root.addView(TextView(this).apply {
+            text = "Kết nối Wi-Fi hiện hỗ trợ iPhone đã ghép đôi trước đó và bật Wi-Fi Sync: ứng dụng tìm thiết bị qua Bonjour/mDNS, đối chiếu authTag với pairing record đã lưu, sau đó yêu cầu bạn xác thực Lockdown TLS trước khi truyền IPA đã ký.\\n\\nĐây là đường tương thích Lockdown Wi-Fi Sync cũ, không phải Apple RemotePairing/CoreDevice. Ghép đôi mới qua RemotePairing/RSD chưa được triển khai; cài đặt Wi-Fi vẫn cần kiểm thử trên iPhone thật."
+            textSize = 13f
+            setTextColor(0xFFFFD18A.toInt())
+            setPadding(0, dp(6), 0, dp(10))
+        })
+        wifiScanButton = Button(this).apply {
+            text = "Quét iPhone/iPad cùng Wi-Fi"
+            isAllCaps = false
+            setOnClickListener {
+                val current = activeWifiDiscovery
+                if (current != null) {
+                    current.close()
+                    activeWifiDiscovery = null
+                    text = "Quét iPhone/iPad cùng Wi-Fi"
+                } else {
+                    wifiDevicesPanel.removeAllViews()
+                    val discovery = WifiAppleDeviceDiscovery(this@DeviceConnectionActivity, object : WifiAppleDeviceDiscovery.Listener {
+                        override fun onStatus(message: String) {
+                            runOnUiThread { status.text = message }
+                        }
+
+                        override fun onDeviceFound(device: WifiAppleDeviceDiscovery.DiscoveredDevice) {
+                            runOnUiThread {
+                                val card = LinearLayout(this@DeviceConnectionActivity).apply {
+                                    orientation = LinearLayout.VERTICAL
+                                    tag = device.serviceName
+                                    setPadding(dp(12), dp(10), dp(12), dp(10))
+                                    setBackgroundColor(0xFF162135.toInt())
+                                }
+                                val storedRecords = pairRecordStore.listDeviceIds().mapNotNull { deviceId ->
+                                    runCatching { pairRecordStore.load(deviceId) }.getOrNull()
+                                }
+                                val match = AppleWifiPairingMatcher.findMatch(device.txtRecord, storedRecords)
+                                card.addView(TextView(this@DeviceConnectionActivity).apply {
+                                    text = buildString {
+                                        append("Dịch vụ Bonjour: ${device.serviceName}")
+                                        append("\nĐịa chỉ mạng: ${device.hostAddress}:${device.port}")
+                                        if (match != null) {
+                                            append("\nĐÃ KHỚP AUTH TAG (ỨNG VIÊN): ${match.deviceId}")
+                                            append("\nĐã xác định ứng viên theo authTag; vẫn phải xác thực TLS trước khi truyền dữ liệu.")
+                                        } else {
+                                            append("\nCHƯA KHỚP pairing record đã lưu.")
+                                            append("\nKhông kết nối đến dịch vụ này và không gửi thông tin pairing.")
+                                        }
+                                        append("\nTXT identifier: ${if (device.txtRecord.containsKey("identifier")) "có" else "thiếu"}")
+                                    }
+                                    textSize = 13f
+                                    setTextColor(-1)
+                                })
+                                if (match != null) {
+                                    var wifiInstallButton: Button? = null
+                                    val connectButton = Button(this@DeviceConnectionActivity).apply {
+                                        text = "Xác thực kết nối Wi-Fi"
+                                        isAllCaps = false
+                                        setOnClickListener {
+                                            isEnabled = false
+                                            status.text = "Đang mở Lockdown qua Wi-Fi và xác minh chứng chỉ TLS của iPhone…"
+                                            Thread({
+                                                var authenticated: LockdownTlsSession? = null
+                                                var failure: Exception? = null
+                                                try {
+                                                    val pairedRecord = pairRecordStore.load(match.deviceId)
+                                                        ?: throw IllegalStateException("Không còn pairing record đã lưu; hãy ghép đôi lại bằng USB.")
+                                                    authenticated = WifiLockdownConnector.connect(
+                                                        device.hostAddress,
+                                                        device.port,
+                                                        pairedRecord
+                                                    )
+                                                } catch (error: Exception) {
+                                                    failure = error
+                                                }
+                                                runOnUiThread {
+                                                    if (isFinishing || isDestroyed) {
+                                                        authenticated?.close()
+                                                    } else if (authenticated != null) {
+                                                        activeWifiLockdownSession?.close()
+                                                        activeWifiLockdownSession = authenticated
+                                                        activeWifiLockdownDeviceId = match.deviceId
+                                                        activeWifiServiceName = device.serviceName
+                                                        text = "Đã xác thực TLS"
+                                                        wifiInstallButton?.isEnabled = true
+                                                        status.text = "Đã xác thực Lockdown TLS với iPhone qua Wi-Fi. Phiên đã sẵn sàng; chọn “Cài IPA qua Wi-Fi” để gửi IPA đã ký từ màn hình chính."
+                                                    } else {
+                                                        isEnabled = true
+                                                        status.text = "Không xác thực được Lockdown TLS qua Wi-Fi: ${failure?.message ?: "lỗi không xác định"}"
+                                                    }
+                                                }
+                                            }, "BoSideload-wifi-lockdown").apply { isDaemon = true; start() }
+                                        }
+                                    }
+                                    card.addView(connectButton)
+                                    wifiInstallButton = Button(this@DeviceConnectionActivity).apply {
+                                        text = "Cài IPA qua Wi-Fi"
+                                        isAllCaps = false
+                                        isEnabled = false
+                                        setOnClickListener {
+                                            val session = activeWifiLockdownSession
+                                            val ipa = signedIpaFile()
+                                            if (session == null || activeWifiLockdownDeviceId != match.deviceId || ipa == null || !ipa.isFile || !ipa.canRead() || ipa.length() <= 0) {
+                                                status.text = "Cần xác thực Wi-Fi và chọn IPA đã ký từ màn hình chính trước."
+                                                return@setOnClickListener
+                                            }
+                                            if (ipa.length() > MAX_INSTALL_IPA_BYTES || pairingInProgress) {
+                                                status.text = "IPA vượt 512 MB hoặc đang có thao tác cài đặt."
+                                                return@setOnClickListener
+                                            }
+                                            pairingInProgress = true
+                                            isEnabled = false
+                                            status.text = "Đang cài IPA qua Wi-Fi…"
+                                            Thread({
+                                                try {
+                                                    val record = pairRecordStore.load(match.deviceId)
+                                                        ?: throw IllegalStateException("Pairing record không còn")
+                                                    val result = ipa.inputStream().use { input ->
+                                                        WifiSideloadInstallCoordinator(session, device.hostAddress, record).install(
+                                                            input, ipa.length()
+                                                        ) { progress ->
+                                                            runOnUiThread {
+                                                                status.text = when (progress.stage) {
+                                                                    WifiSideloadInstallCoordinator.Stage.UPLOADING_IPA ->
+                                                                        "Đang tải IPA qua Wi-Fi: ${progress.bytesTransferred ?: 0} / ${progress.totalBytes ?: 0} byte"
+                                                                    WifiSideloadInstallCoordinator.Stage.INSTALLING_APP ->
+                                                                        "Đang cài ứng dụng: ${progress.installPercent ?: 0}% — ${progress.message}"
+                                                                    WifiSideloadInstallCoordinator.Stage.COMPLETE -> progress.message
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                    runOnUiThread {
+                                                        pairingInProgress = false
+                                                        status.text = if (result.stagingCleanupSucceeded) {
+                                                            "✓ iPhone báo cài đặt hoàn tất qua Wi-Fi; IPA tạm đã được xóa."
+                                                        } else {
+                                                            "✓ iPhone báo cài đặt hoàn tất qua Wi-Fi; không xóa được IPA tạm."
+                                                        }
+                                                        wifiInstallButton?.isEnabled = activeWifiLockdownSession != null
+                                                    }
+                                                } catch (error: Exception) {
+                                                    runOnUiThread {
+                                                        pairingInProgress = false
+                                                        status.text = "Cài IPA qua Wi-Fi thất bại: ${error.message}"
+                                                        wifiInstallButton?.isEnabled = activeWifiLockdownSession != null
+                                                    }
+                                                }
+                                            }, "BoSideload-wifi-install").apply { isDaemon = true; start() }
+                                        }
+                                    }
+                                    card.addView(wifiInstallButton)
+                                    wifiInstallButton?.let { wifiInstallButtonsByService[device.serviceName] = it }
+                                }
+                                wifiDevicesPanel.addView(card, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+                                status.text = if (match != null) {
+                                    "Đã khớp authTag với pairing record. Đây mới là ứng viên; xác thực TLS chưa được thực hiện."
+                                } else {
+                                    "Đã thấy dịch vụ Apple nhưng chưa khớp pairing record. Ứng dụng sẽ không kết nối."
+                                }
+                            }
+                        }
+
+                        override fun onDeviceLost(serviceName: String) {
+                            runOnUiThread {
+                                for (index in wifiDevicesPanel.childCount - 1 downTo 0) {
+                                    if (wifiDevicesPanel.getChildAt(index).tag == serviceName) {
+                                        wifiDevicesPanel.removeViewAt(index)
+                                    }
+                                }
+                                // Do not keep an install session alive after its Bonjour device disappears.
+                                wifiInstallButtonsByService.remove(serviceName)?.apply {
+                                    isEnabled = false
+                                    text = "iPhone đã mất kết nối — hãy quét lại"
+                                }
+                                if (activeWifiServiceName == serviceName) {
+                                    activeWifiLockdownSession?.close()
+                                    activeWifiLockdownSession = null
+                                    activeWifiLockdownDeviceId = null
+                                    activeWifiServiceName = null
+                                    status.text = "iPhone đã rời mạng Wi-Fi hoặc tắt Wi-Fi Sync. Phiên kết nối đã đóng; hãy quét và xác thực lại."
+                                }
+                            }
+                        }
+                    })
+                    activeWifiDiscovery = discovery
+                    wifiScanButton.text = "Dừng quét Wi-Fi"
+                    discovery.start()
+                }
+            }
+        }
+        root.addView(wifiScanButton)
+        wifiDevicesPanel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        root.addView(wifiDevicesPanel)
         pairButton = Button(this).apply {
             text = "Ghép đôi iPhone (Lockdown)"
             isAllCaps = false
@@ -125,6 +331,9 @@ class DeviceConnectionActivity : Activity() {
             @Suppress("DEPRECATION")
             registerReceiver(permissionReceiver, filter)
         }
+        if (intent.getBooleanExtra(EXTRA_START_WIFI_SCAN, false)) {
+            wifiScanButton.performClick()
+        }
     }
 
     override fun onResume() {
@@ -137,6 +346,12 @@ class DeviceConnectionActivity : Activity() {
         activeMonitor?.close()
         activeMonitor = null
         activeMonitorDeviceId = null
+        activeWifiDiscovery?.close()
+        activeWifiDiscovery = null
+        activeWifiLockdownSession?.close()
+        activeWifiLockdownSession = null
+        activeWifiLockdownDeviceId = null
+        activeWifiServiceName = null
         attachedAppleDevice = null
         super.onDestroy()
     }
@@ -225,10 +440,10 @@ class DeviceConnectionActivity : Activity() {
                                     runOnUiThread {
                                         status.text = buildString {
                                             append("usbmux báo thiết bị Attached. DeviceID: ").append(deviceInfo.deviceId)
-                                            deviceInfo.serialNumber?.let { append("\\nSerial: ").append(it) }
-                                            deviceInfo.connectionType?.let { append("\\nKiểu kết nối: ").append(it) }
-                                            deviceInfo.productId?.let { append("\\nProduct ID: ").append(hex(it.toInt())) }
-                                            append("\\nĐây chưa phải xác nhận Lockdown pairing.")
+                                            deviceInfo.serialNumber?.let { append("\nSerial: ").append(it) }
+                                            deviceInfo.connectionType?.let { append("\nKiểu kết nối: ").append(it) }
+                                            deviceInfo.productId?.let { append("\nProduct ID: ").append(hex(it.toInt())) }
+                                            append("\nĐây chưa phải xác nhận Lockdown pairing.")
                                         }
                                         // Keep the Android USB device that owns this usbmux
                                         // interface; Lockdown pairing and IPA installation
@@ -456,8 +671,9 @@ class DeviceConnectionActivity : Activity() {
                     deviceId = usbmuxDeviceId,
                     devicePort = UsbMuxConnectSession.LOCKDOWN_PORT
                 )
-                val systemBuid = PairingIdentityStore(this).getOrCreateSystemBuid()
-                val hostId = java.util.UUID.randomUUID().toString().uppercase(java.util.Locale.ROOT)
+                val identityStore = PairingIdentityStore(this)
+                val systemBuid = identityStore.getOrCreateSystemBuid()
+                val hostId = identityStore.getOrCreateHostId()
                 val store = EncryptedPairRecordStore(this)
                 connect.use { session ->
                     LockdownSessionChannel(session.inputStream, session.outputStream).use { channel ->
@@ -517,6 +733,7 @@ class DeviceConnectionActivity : Activity() {
 
     companion object {
         const val EXTRA_SIGNED_IPA_PATH = "com.bosideload.android.extra.SIGNED_IPA_PATH"
+        const val EXTRA_START_WIFI_SCAN = "com.bosideload.android.extra.START_WIFI_SCAN"
         internal const val VERIFIED_DEVICE_PREFS = "bo_verified_iphone"
         internal const val KEY_LAST_VERIFIED_UDID = "last_verified_udid"
         private const val MAX_INSTALL_IPA_BYTES = 512L * 1024L * 1024L
