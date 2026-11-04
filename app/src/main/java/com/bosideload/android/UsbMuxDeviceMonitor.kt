@@ -41,7 +41,7 @@ internal class UsbMuxDeviceMonitor(
     private fun runMonitor() {
         try {
             listener.onStatus("Đang mở giao diện USBMux của Apple…")
-            val transport = AndroidUsbMuxTransport.open(usbManager, device, timeoutMs = 0)
+            // Never use an infinite bulkTransfer timeout: some OTG adapters or\n            // iOS USB states do not complete the first Listen write/read. A\n            // bounded timeout keeps this worker recoverable and lets the UI\n            // report the failure instead of leaving a USB call blocked forever.\n            val transport = AndroidUsbMuxTransport.open(\n                usbManager, device, timeoutMs = AndroidUsbMuxTransport.DEFAULT_TIMEOUT_MS\n            )
             val activeSession = UsbMuxListenSession(transport)
             // Publish the session atomically with respect to close(). If close()
             // wins while USB is opening, do not start a listener on a stopped monitor.
