@@ -147,7 +147,8 @@ internal class AndroidUsbMuxTransport private constructor(
         fun open(
             usbManager: UsbManager,
             device: UsbDevice,
-            timeoutMs: Int = DEFAULT_TIMEOUT_MS
+            timeoutMs: Int = DEFAULT_TIMEOUT_MS,
+            interfaceId: Int? = null
         ): AndroidUsbMuxTransport {
             require(timeoutMs >= 0) { "timeout must not be negative; use 0 for an indefinite USB read" }
             check(usbManager.hasPermission(device)) { "Android USB permission has not been granted" }
@@ -158,6 +159,7 @@ internal class AndroidUsbMuxTransport private constructor(
 
             for (index in 0 until device.interfaceCount) {
                 val candidate = device.getInterface(index)
+                if (interfaceId != null && candidate.id != interfaceId) continue
                 if (candidate.interfaceClass != USBMUX_CLASS ||
                     candidate.interfaceSubclass != USBMUX_SUBCLASS ||
                     candidate.interfaceProtocol != USBMUX_PROTOCOL) continue
