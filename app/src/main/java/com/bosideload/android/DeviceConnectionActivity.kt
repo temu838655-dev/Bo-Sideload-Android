@@ -665,7 +665,11 @@ class DeviceConnectionActivity : Activity() {
 
         Thread({
             try {
-                val transport = AndroidUsbMuxTransport.open(usbManager, usbDevice)
+                val transport = AndroidUsbMuxTransport.open(
+                    usbManager,
+                    usbDevice,
+                    timeoutMs = SERVICE_IO_TIMEOUT_MS
+                )
                 val connect = UsbMuxConnectSession.connect(
                     transport = transport,
                     deviceId = usbmuxDeviceId,
