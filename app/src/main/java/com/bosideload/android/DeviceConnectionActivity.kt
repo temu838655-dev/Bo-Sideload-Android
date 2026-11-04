@@ -394,7 +394,8 @@ class DeviceConnectionActivity : Activity() {
                     if (usbManager.hasPermission(device)) {
                         for (index in 0 until device.interfaceCount) {
                             val usbInterface = device.getInterface(index)
-                            append("\n\nInterface ").append(index + 1)
+                            append("\n\nInterface listIndex=").append(index)
+                            append(", id=").append(usbInterface.id)
                             append(": class=").append(hex(usbInterface.interfaceClass))
                             append(", subclass=").append(hex(usbInterface.interfaceSubclass))
                             append(", protocol=").append(hex(usbInterface.interfaceProtocol))
@@ -493,7 +494,7 @@ class DeviceConnectionActivity : Activity() {
                 if (usbManager.hasPermission(device)) {
                     for (i in 0 until device.interfaceCount) {
                         val usbInterface = device.getInterface(i)
-                        appendLine("Interface $i: class=${hex(usbInterface.interfaceClass)} subclass=${hex(usbInterface.interfaceSubclass)} protocol=${hex(usbInterface.interfaceProtocol)}")
+                        appendLine("Interface listIndex=$i id=${usbInterface.id}: class=${hex(usbInterface.interfaceClass)} subclass=${hex(usbInterface.interfaceSubclass)} protocol=${hex(usbInterface.interfaceProtocol)}")
                         for (e in 0 until usbInterface.endpointCount) {
                             val endpoint = usbInterface.getEndpoint(e)
                             appendLine("Endpoint $e: address=${hex(endpoint.address)} direction=${endpoint.direction} type=${endpoint.type} maxPacket=${endpoint.maxPacketSize}")
