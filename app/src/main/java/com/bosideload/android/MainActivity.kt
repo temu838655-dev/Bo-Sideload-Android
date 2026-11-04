@@ -80,19 +80,20 @@ class MainActivity : Activity() {
         }, fullWidth())
 
         page.addView(Button(this).apply {
-            text = "Kết nối iPhone (USB / Wi-Fi)"
+            text = "① KẾT NỐI iPHONE QUA WI-FI (KHÔNG DÂY)"
             isAllCaps = false
-            setOnClickListener {
-                startActivity(Intent(this@MainActivity, DeviceConnectionActivity::class.java))
-            }
-        }, fullWidth())
-        page.addView(Button(this).apply {
-            text = "Quét và kết nối iPhone qua Wi-Fi"
-            isAllCaps = false
+            textSize = 15f
             setOnClickListener {
                 startActivity(Intent(this@MainActivity, DeviceConnectionActivity::class.java).apply {
                     putExtra(DeviceConnectionActivity.EXTRA_START_WIFI_SCAN, true)
                 })
+            }
+        }, fullWidth())
+        page.addView(Button(this).apply {
+            text = "② Kết nối iPhone bằng cáp USB OTG"
+            isAllCaps = false
+            setOnClickListener {
+                startActivity(Intent(this@MainActivity, DeviceConnectionActivity::class.java))
             }
         }, fullWidth())
         installSignedButton = Button(this).apply {
